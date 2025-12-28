@@ -267,6 +267,40 @@ body {
   margin-right: 2rem;
 }
 
+/* Markdown in messages */
+.message-content p {
+  margin-bottom: 0.75rem;
+}
+
+.message-content p:last-child {
+  margin-bottom: 0;
+}
+
+.message-content ul,
+.message-content ol {
+  margin: 0.75rem 0;
+  padding-left: 1.5rem;
+}
+
+.message-content li {
+  margin-bottom: 0.25rem;
+}
+
+.message-content strong {
+  font-weight: 600;
+}
+
+.message-content em {
+  font-style: italic;
+}
+
+.message-content blockquote {
+  border-left: 2px solid var(--color-border);
+  padding-left: 1rem;
+  margin: 0.75rem 0;
+  color: var(--color-text-muted);
+}
+
 .message-content {
   white-space: pre-wrap;
 }

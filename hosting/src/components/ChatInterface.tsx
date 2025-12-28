@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Markdown from 'react-markdown';
 import { sendMessage, endSession, Conversation, ConversationMessage } from '../api/client';
 
 interface ChatInterfaceProps {
@@ -71,7 +72,13 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded 
       <div className="messages">
         {messages.map((msg, index) => (
           <div key={index} className={`message ${msg.role}`}>
-            <div className="message-content">{msg.content}</div>
+            <div className="message-content">
+              {msg.role === 'assistant' ? (
+                <Markdown>{msg.content}</Markdown>
+              ) : (
+                msg.content
+              )}
+            </div>
           </div>
         ))}
         {sending && (

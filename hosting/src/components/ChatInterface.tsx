@@ -29,6 +29,16 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded 
     try {
       const response = await sendMessage(userMessage);
       setMessages(response.conversation.messages);
+
+      // Auto-end session if Claude detected user wants to end
+      if (response.sessionShouldEnd) {
+        try {
+          await endSession();
+          setSessionEnded(true);
+        } catch (endError) {
+          console.error('Failed to auto-end session:', endError);
+        }
+      }
     } catch (error) {
       console.error('Failed to send message:', error);
       // Remove optimistic message on error

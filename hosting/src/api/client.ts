@@ -87,6 +87,7 @@ export interface TodayResponse {
 export interface MessageResponse {
   response: string;
   conversation: Conversation;
+  sessionShouldEnd?: boolean;
 }
 
 // API functions

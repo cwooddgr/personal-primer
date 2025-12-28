@@ -118,6 +118,7 @@ export interface MessageRequest {
 export interface MessageResponse {
   response: string;
   conversation: Conversation;
+  sessionShouldEnd?: boolean;
 }
 
 export interface ReactRequest {

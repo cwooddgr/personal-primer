@@ -39,11 +39,12 @@ export async function handlePostMessage(req: Request, res: Response): Promise<vo
       return;
     }
 
-    const { response, conversation } = await handleMessage(message, bundle, arc);
+    const { response, conversation, sessionShouldEnd } = await handleMessage(message, bundle, arc);
 
     const result: MessageResponse = {
       response,
       conversation,
+      sessionShouldEnd,
     };
 
     res.json(result);

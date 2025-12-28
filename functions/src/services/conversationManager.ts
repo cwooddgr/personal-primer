@@ -50,7 +50,10 @@ YOUR ROLE:
 - Avoid over-explanation; preserve mystery and wonder
 - If the user shares personal context, acknowledge it naturally
 
-You are a guide, not a teacher. A companion in exploration, not an authority.`;
+You are a guide, not a teacher. A companion in exploration, not an authority.
+
+SESSION ENDING:
+If the user indicates they want to end the conversation (e.g., "let's end here", "that's all for today", "goodbye", "thank you, I'll stop there"), respond warmly and naturally, then add the marker {{END_SESSION}} at the very end of your response (after your farewell). Do not mention this marker or explain it—just include it silently at the end.`;
 }
 
 function formatInsights(insights: SessionInsights[]): string {
@@ -89,11 +92,13 @@ function trimMessagesToFit(messages: ChatMessage[], maxTokens: number): ChatMess
   return trimmed;
 }
 
+const END_SESSION_MARKER = '{{END_SESSION}}';
+
 export async function handleMessage(
   userMessage: string,
   bundle: DailyBundle,
   arc: Arc
-): Promise<{ response: string; conversation: Conversation }> {
+): Promise<{ response: string; conversation: Conversation; sessionShouldEnd: boolean }> {
   const bundleId = bundle.id;
   const now = toTimestamp(new Date());
   const dayInArc = calculateDayInArc(arc);
@@ -125,7 +130,14 @@ export async function handleMessage(
 
   // Get response from Claude
   const systemPrompt = buildConversationSystemPrompt(bundle, arc, dayInArc, insights);
-  const assistantResponse = await chat(systemPrompt, trimmedMessages);
+  let assistantResponse = await chat(systemPrompt, trimmedMessages);
+
+  // Check for session-end marker
+  const sessionShouldEnd = assistantResponse.includes(END_SESSION_MARKER);
+  if (sessionShouldEnd) {
+    // Strip the marker from the response
+    assistantResponse = assistantResponse.replace(END_SESSION_MARKER, '').trim();
+  }
 
   // Update conversation
   const userMsg: ConversationMessage = {
@@ -147,5 +159,5 @@ export async function handleMessage(
     lastActivity: conversation.lastActivity,
   });
 
-  return { response: assistantResponse, conversation };
+  return { response: assistantResponse, conversation, sessionShouldEnd };
 }

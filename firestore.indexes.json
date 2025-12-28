@@ -1,17 +1,11 @@
 {
   "indexes": [
     {
-      "collectionGroup": "exposures",
+      "collectionGroup": "arcs",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "dateShown", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "dailyBundles",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "date", "order": "DESCENDING" }
+        { "fieldPath": "completedDate", "order": "ASCENDING" },
+        { "fieldPath": "startDate", "order": "DESCENDING" }
       ]
     },
     {
@@ -20,13 +14,6 @@
       "fields": [
         { "fieldPath": "sessionEnded", "order": "ASCENDING" },
         { "fieldPath": "lastActivity", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "sessionInsights",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "date", "order": "DESCENDING" }
       ]
     }
   ],

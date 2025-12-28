@@ -3,6 +3,19 @@ import { MessageRequest, MessageResponse } from '../types';
 import { getBundle, getActiveArc, getTodayId } from '../utils/firestore';
 import { handleMessage } from '../services/conversationManager';
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    if (error.message.includes('credit balance is too low')) {
+      return 'Anthropic API credits depleted. Please add credits at console.anthropic.com';
+    }
+    if (error.message.includes('rate_limit')) {
+      return 'Rate limit reached. Please try again in a few minutes.';
+    }
+    return error.message;
+  }
+  return 'Failed to process message';
+}
+
 export async function handlePostMessage(req: Request, res: Response): Promise<void> {
   try {
     const { message } = req.body as MessageRequest;
@@ -36,6 +49,6 @@ export async function handlePostMessage(req: Request, res: Response): Promise<vo
     res.json(result);
   } catch (error) {
     console.error('Error in POST /api/today/message:', error);
-    res.status(500).json({ error: 'Failed to process message' });
+    res.status(500).json({ error: getErrorMessage(error) });
   }
 }

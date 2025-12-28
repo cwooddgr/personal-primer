@@ -38,14 +38,24 @@ export function toTimestamp(date: Date): Timestamp {
 
 // Arc operations
 export async function getActiveArc(): Promise<Arc | null> {
+  // Get all arcs ordered by start date, filter for active in memory
+  // This avoids complex index requirements for null checks
   const snapshot = await collections.arcs
-    .where('completedDate', '==', null)
     .orderBy('startDate', 'desc')
-    .limit(1)
+    .limit(10)
     .get();
 
   if (snapshot.empty) return null;
-  return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Arc;
+
+  // Find the first arc without a completedDate
+  for (const doc of snapshot.docs) {
+    const data = doc.data();
+    if (!data.completedDate) {
+      return { id: doc.id, ...data } as Arc;
+    }
+  }
+
+  return null;
 }
 
 export async function updateArcPhase(arcId: string, phase: Arc['currentPhase']): Promise<void> {

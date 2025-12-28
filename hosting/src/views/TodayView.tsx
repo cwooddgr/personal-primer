@@ -1,0 +1,84 @@
+import { useEffect, useState } from 'react';
+import { getToday, TodayResponse } from '../api/client';
+import MusicCard from '../components/MusicCard';
+import ImageCard from '../components/ImageCard';
+import TextCard from '../components/TextCard';
+import FramingText from '../components/FramingText';
+import ChatInterface from '../components/ChatInterface';
+
+function TodayView() {
+  const [data, setData] = useState<TodayResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadToday() {
+      try {
+        const response = await getToday();
+        setData(response);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadToday();
+  }, []);
+
+  if (loading) {
+    return <div className="loading">Preparing today's encounter...</div>;
+  }
+
+  if (error) {
+    return <div className="error-message">{error}</div>;
+  }
+
+  if (!data) {
+    return <div className="error-message">No data available</div>;
+  }
+
+  const { bundle, conversation, arc } = data;
+
+  return (
+    <div className="today-view">
+      <header className="today-header">
+        <h1>Today</h1>
+        <p className="arc-badge">
+          {arc.theme} &middot; {arc.currentPhase}
+        </p>
+      </header>
+
+      <section className="artifacts">
+        <MusicCard
+          title={bundle.music.title}
+          artist={bundle.music.artist}
+          appleMusicUrl={bundle.music.appleMusicUrl}
+        />
+
+        <ImageCard
+          title={bundle.image.title}
+          artist={bundle.image.artist}
+          year={bundle.image.year}
+          sourceUrl={bundle.image.sourceUrl}
+          imageUrl={bundle.image.imageUrl}
+        />
+
+        <TextCard
+          content={bundle.text.content}
+          source={bundle.text.source}
+          author={bundle.text.author}
+        />
+      </section>
+
+      <FramingText text={bundle.framingText} />
+
+      <ChatInterface
+        initialConversation={conversation}
+        sessionEnded={conversation?.sessionEnded ?? false}
+      />
+    </div>
+  );
+}
+
+export default TodayView;

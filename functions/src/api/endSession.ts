@@ -5,6 +5,10 @@ import { extractAndEndSession } from '../services/insightExtractor';
 export async function handleEndSession(req: Request, res: Response): Promise<void> {
   try {
     const { date } = req.body as { date: string };
+    if (!date) {
+      res.status(400).json({ error: 'Date parameter is required. Please refresh the page.' });
+      return;
+    }
     const todayId = validateDateId(date);
     const bundle = await getBundle(todayId);
 

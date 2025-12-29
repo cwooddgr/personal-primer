@@ -25,6 +25,11 @@ export async function handlePostMessage(req: Request, res: Response): Promise<vo
       return;
     }
 
+    if (!date) {
+      res.status(400).json({ error: 'Date parameter is required. Please refresh the page.' });
+      return;
+    }
+
     const todayId = validateDateId(date);
     const bundle = await getBundle(todayId);
 

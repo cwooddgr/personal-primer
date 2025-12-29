@@ -26,7 +26,12 @@ function getErrorMessage(error: unknown): string {
 
 export async function handleGetToday(req: Request, res: Response): Promise<void> {
   try {
-    const todayId = validateDateId(req.query.date as string);
+    const dateParam = req.query.date as string;
+    if (!dateParam) {
+      res.status(400).json({ error: 'Date parameter is required. Please refresh the page.' });
+      return;
+    }
+    const todayId = validateDateId(dateParam);
 
     // Get or generate today's bundle
     let bundle = await getBundle(todayId);

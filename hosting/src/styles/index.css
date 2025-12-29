@@ -62,6 +62,12 @@ body {
   padding: 4rem var(--spacing);
   text-align: center;
   color: var(--color-text-muted);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
 }
 
 .error-message {

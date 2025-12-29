@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { getBundle, validateDateId } from '../utils/firestore';
 import { extractAndEndSession } from '../services/insightExtractor';
+import { EndSessionResponse } from '../types';
 
 export async function handleEndSession(req: Request, res: Response): Promise<void> {
   try {
@@ -17,9 +18,14 @@ export async function handleEndSession(req: Request, res: Response): Promise<voi
       return;
     }
 
-    await extractAndEndSession(todayId, bundle);
+    const suggestedReading = await extractAndEndSession(todayId, bundle);
 
-    res.json({ success: true });
+    const response: EndSessionResponse = {
+      success: true,
+      suggestedReading: suggestedReading || undefined,
+    };
+
+    res.json(response);
   } catch (error) {
     console.error('Error in POST /api/today/end-session:', error);
     res.status(500).json({ error: 'Failed to end session' });

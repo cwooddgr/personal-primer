@@ -362,11 +362,50 @@ body {
   background: #f5f5f5;
 }
 
+.session-ended-container {
+  text-align: center;
+  padding: 1rem;
+}
+
 .session-ended {
   color: var(--color-text-muted);
   font-style: italic;
-  text-align: center;
-  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.suggested-reading {
+  margin-top: 1rem;
+  padding: 1.5rem;
+  background: #fafafa;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.suggested-reading-label {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.suggested-reading-link {
+  display: block;
+  font-size: 1.1rem;
+  color: var(--color-accent);
+  text-decoration: none;
+  margin-bottom: 0.5rem;
+}
+
+.suggested-reading-link:hover {
+  text-decoration: underline;
+}
+
+.suggested-reading-rationale {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
 }
 
 /* Arc View */

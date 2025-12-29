@@ -76,6 +76,7 @@ function TodayView() {
       <ChatInterface
         initialConversation={conversation}
         sessionEnded={conversation?.sessionEnded ?? false}
+        initialSuggestedReading={bundle.suggestedReading}
       />
     </div>
   );

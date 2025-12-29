@@ -10,6 +10,12 @@ export interface Arc {
   completedDate?: Timestamp;
 }
 
+export interface SuggestedReading {
+  title: string;
+  url: string;
+  rationale: string;
+}
+
 export interface DailyBundle {
   id: string; // Format: YYYY-MM-DD
   date: Timestamp;
@@ -32,6 +38,7 @@ export interface DailyBundle {
     author: string;
   };
   framingText: string;
+  suggestedReading?: SuggestedReading;
 }
 
 export interface Exposure {
@@ -102,6 +109,11 @@ export interface LLMInsightsExtraction {
   personalContext: string[];
   revisitLater: string[];
   rawSummary: string;
+  suggestedReading: {
+    title: string;
+    searchQuery: string;
+    rationale: string;
+  } | null;
 }
 
 // API response types
@@ -126,6 +138,11 @@ export interface ReactRequest {
   artifactType?: 'music' | 'image' | 'text' | 'overall';
   reactionType: 'awe' | 'interest' | 'resistance' | 'familiarity' | 'freeform';
   notes?: string;
+}
+
+export interface EndSessionResponse {
+  success: boolean;
+  suggestedReading?: SuggestedReading;
 }
 
 export interface HistoryQuery {

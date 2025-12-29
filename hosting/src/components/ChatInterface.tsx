@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import Markdown from 'react-markdown';
-import { sendMessage, endSession, Conversation, ConversationMessage } from '../api/client';
+import { sendMessage, endSession, Conversation, ConversationMessage, SuggestedReading } from '../api/client';
 
 interface ChatInterfaceProps {
   initialConversation: Conversation | null;
   sessionEnded: boolean;
+  initialSuggestedReading?: SuggestedReading;
 }
 
-function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded }: ChatInterfaceProps) {
+function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded, initialSuggestedReading }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<ConversationMessage[]>(
     initialConversation?.messages || []
   );
@@ -15,6 +16,7 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded 
   const [sending, setSending] = useState(false);
   const [sessionEnded, setSessionEnded] = useState(initialSessionEnded);
   const [ending, setEnding] = useState(false);
+  const [suggestedReading, setSuggestedReading] = useState<SuggestedReading | undefined>(initialSuggestedReading);
 
   const handleSend = async () => {
     if (!input.trim() || sending || sessionEnded) return;
@@ -33,8 +35,11 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded 
       // Auto-end session if Claude detected user wants to end
       if (response.sessionShouldEnd) {
         try {
-          await endSession();
+          const endResponse = await endSession();
           setSessionEnded(true);
+          if (endResponse.suggestedReading) {
+            setSuggestedReading(endResponse.suggestedReading);
+          }
         } catch (endError) {
           console.error('Failed to auto-end session:', endError);
         }
@@ -53,8 +58,11 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded 
 
     setEnding(true);
     try {
-      await endSession();
+      const response = await endSession();
       setSessionEnded(true);
+      if (response.suggestedReading) {
+        setSuggestedReading(response.suggestedReading);
+      }
     } catch (error) {
       console.error('Failed to end session:', error);
     } finally {
@@ -99,7 +107,18 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded 
       </div>
 
       {sessionEnded ? (
-        <p className="session-ended">Session ended</p>
+        <div className="session-ended-container">
+          <p className="session-ended">Session ended</p>
+          {suggestedReading && (
+            <div className="suggested-reading">
+              <p className="suggested-reading-label">Further reading</p>
+              <a href={suggestedReading.url} target="_blank" rel="noopener noreferrer" className="suggested-reading-link">
+                {suggestedReading.title}
+              </a>
+              <p className="suggested-reading-rationale">{suggestedReading.rationale}</p>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="chat-input-area">
           <textarea

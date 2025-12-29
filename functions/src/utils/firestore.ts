@@ -3,6 +3,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import {
   Arc,
   DailyBundle,
+  SuggestedReading,
   Exposure,
   Conversation,
   SessionInsights,
@@ -98,6 +99,13 @@ export async function getBundleHistory(limit: number = 30, before?: string): Pro
 
   const snapshot = await query.get();
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DailyBundle));
+}
+
+export async function updateBundleSuggestedReading(
+  bundleId: string,
+  suggestedReading: SuggestedReading
+): Promise<void> {
+  await collections.dailyBundles.doc(bundleId).update({ suggestedReading });
 }
 
 // Exposure operations

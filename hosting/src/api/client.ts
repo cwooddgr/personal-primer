@@ -43,6 +43,12 @@ export interface Arc {
   targetDurationDays: number;
 }
 
+export interface SuggestedReading {
+  title: string;
+  url: string;
+  rationale: string;
+}
+
 export interface DailyBundle {
   id: string;
   arcId: string;
@@ -64,6 +70,7 @@ export interface DailyBundle {
     author: string;
   };
   framingText: string;
+  suggestedReading?: SuggestedReading;
 }
 
 export interface ConversationMessage {
@@ -90,6 +97,11 @@ export interface MessageResponse {
   sessionShouldEnd?: boolean;
 }
 
+export interface EndSessionResponse {
+  success: boolean;
+  suggestedReading?: SuggestedReading;
+}
+
 // Helper to get local date in YYYY-MM-DD format
 function getLocalDate(): string {
   const now = new Date();
@@ -113,9 +125,9 @@ export async function sendMessage(message: string): Promise<MessageResponse> {
   });
 }
 
-export async function endSession(): Promise<void> {
+export async function endSession(): Promise<EndSessionResponse> {
   const localDate = getLocalDate();
-  return fetchAPI<void>('/today/end-session', {
+  return fetchAPI<EndSessionResponse>('/today/end-session', {
     method: 'POST',
     body: JSON.stringify({ date: localDate }),
   });

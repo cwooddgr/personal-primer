@@ -252,4 +252,52 @@ export async function resolveImageLink(
   }
 }
 
+export interface ResolvedReading {
+  url: string;
+}
+
+export async function resolveReadingUrl(
+  title: string,
+  searchQuery: string
+): Promise<ResolvedReading | null> {
+  try {
+    const results = await googleSearch(searchQuery);
+
+    if (results.length === 0) {
+      console.log(`No search results for reading: "${title}"`);
+      return null;
+    }
+
+    // Prioritize Wikipedia
+    for (const result of results) {
+      if (result.link.includes('wikipedia.org')) {
+        console.log(`Found Wikipedia link for "${title}": ${result.link}`);
+        return { url: result.link };
+      }
+    }
+
+    // Fall back to first result from reputable sources
+    const reputableDomains = [
+      'stanford.edu', 'mit.edu', 'harvard.edu',
+      'nature.com', 'sciencedirect.com', 'jstor.org',
+      'britannica.com', 'plato.stanford.edu',
+      'arxiv.org', 'ncbi.nlm.nih.gov',
+    ];
+
+    for (const result of results) {
+      if (reputableDomains.some(domain => result.link.includes(domain))) {
+        console.log(`Found reputable source for "${title}": ${result.link}`);
+        return { url: result.link };
+      }
+    }
+
+    // Last resort: first result
+    console.log(`Using first result for "${title}": ${results[0].link}`);
+    return { url: results[0].link };
+  } catch (error) {
+    console.error('Error resolving reading URL:', error);
+    return null;
+  }
+}
+
 export { googleSearchApiKey, googleSearchCx };

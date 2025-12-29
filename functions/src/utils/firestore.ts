@@ -27,9 +27,19 @@ export const collections = {
 };
 
 // Date helpers
+// Use US/Mountain timezone (Salt Lake City) for date calculations
+const TIMEZONE = 'America/Denver';
+
 export function getTodayId(): string {
   const now = new Date();
-  return now.toISOString().split('T')[0]; // YYYY-MM-DD
+  // Format date in the configured timezone
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return formatter.format(now); // YYYY-MM-DD
 }
 
 export function toTimestamp(date: Date): Timestamp {

@@ -35,36 +35,88 @@ export interface ResolvedMusic {
   appleMusicUrl: string;
 }
 
+interface iTunesSearchResult {
+  trackName: string;
+  artistName: string;
+  collectionName?: string;
+  trackViewUrl: string;
+}
+
+interface iTunesSearchResponse {
+  resultCount: number;
+  results: iTunesSearchResult[];
+}
+
+function normalizeString(str: string): string {
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+    .replace(/[^a-z0-9\s]/g, '') // Remove punctuation
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function stringsMatch(a: string, b: string): boolean {
+  const normA = normalizeString(a);
+  const normB = normalizeString(b);
+  // Check if one contains the other (handles cases like "Symphony No. 5" vs "Symphony No. 5 in C Minor")
+  return normA.includes(normB) || normB.includes(normA);
+}
+
 export async function resolveAppleMusicLink(
   title: string,
   artist: string,
   searchQuery: string
 ): Promise<ResolvedMusic | null> {
   try {
-    // Search for Apple Music link - don't use site: restriction as it can be flaky
-    const query = `${searchQuery} apple music`;
-    const results = await googleSearch(query);
+    // Use iTunes Search API directly - more reliable than Google Custom Search
+    const searches = [
+      `${title} ${artist}`,
+      searchQuery,
+      `${artist} ${title}`,
+    ];
 
-    // Find an Apple Music URL (skip validation - Apple blocks HEAD requests)
-    for (const result of results) {
-      if (result.link.includes('music.apple.com')) {
-        console.log(`Found Apple Music link: ${result.link}`);
-        return { appleMusicUrl: result.link };
+    for (const query of searches) {
+      const url = new URL('https://itunes.apple.com/search');
+      url.searchParams.set('term', query);
+      url.searchParams.set('entity', 'song');
+      url.searchParams.set('limit', '10');
+
+      console.log(`iTunes Search: "${query}"`);
+      const response = await fetch(url.toString());
+
+      if (!response.ok) {
+        console.error(`iTunes Search API error: ${response.status}`);
+        continue;
+      }
+
+      const data: iTunesSearchResponse = await response.json();
+      console.log(`iTunes Search returned ${data.resultCount} results`);
+
+      // Find a result that matches both title and artist
+      for (const result of data.results) {
+        const titleMatches = stringsMatch(result.trackName, title);
+        const artistMatches = stringsMatch(result.artistName, artist);
+
+        if (titleMatches && artistMatches) {
+          console.log(`Verified Apple Music match: "${result.trackName}" by ${result.artistName}`);
+          console.log(`URL: ${result.trackViewUrl}`);
+          return { appleMusicUrl: result.trackViewUrl };
+        }
+      }
+
+      // If no exact match, check if any result has matching artist and similar title
+      for (const result of data.results) {
+        const artistMatches = stringsMatch(result.artistName, artist);
+        if (artistMatches) {
+          console.log(`Partial match (artist only): "${result.trackName}" by ${result.artistName}`);
+          // Log but continue searching - we want a better match
+        }
       }
     }
 
-    // Fallback: try with title and artist directly
-    const fallbackQuery = `${title} ${artist} apple music`;
-    const fallbackResults = await googleSearch(fallbackQuery);
-
-    for (const result of fallbackResults) {
-      if (result.link.includes('music.apple.com')) {
-        console.log(`Found Apple Music link (fallback): ${result.link}`);
-        return { appleMusicUrl: result.link };
-      }
-    }
-
-    console.log(`No Apple Music link found for: ${title} by ${artist}`);
+    console.log(`Could not verify Apple Music link for: "${title}" by ${artist}`);
     return null;
   } catch (error) {
     console.error('Error resolving Apple Music link:', error);

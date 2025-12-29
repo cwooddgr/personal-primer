@@ -108,7 +108,7 @@ export async function generateDailyBundle(bundleId: string): Promise<DailyBundle
     arc.currentPhase = currentPhase;
   }
 
-  const exposures = await getRecentExposures(30);
+  const exposures = await getRecentExposures(14);
   const insights = await getRecentInsights(14);
 
   // Step 2: LLM selection

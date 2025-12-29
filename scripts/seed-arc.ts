@@ -21,7 +21,7 @@ async function seedFirstArc() {
     description:
       'An exploration of scale—from the cosmic to the microscopic, from civilizations to individual moments. How does perspective shift when we zoom in or out? What remains constant across scales, and what transforms entirely?',
     startDate: admin.firestore.Timestamp.fromDate(new Date()),
-    targetDurationDays: 30,
+    targetDurationDays: 7,
     currentPhase: 'early' as const,
     completedDate: null,
   };

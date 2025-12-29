@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Personal Primer is a personal web application that delivers a single, thoughtful daily intellectual encounter. It curates four artifacts daily (music, image, text, framing) around ~30 day thematic "arcs."
+Personal Primer is a personal web application that delivers a single, thoughtful daily intellectual encounter. It curates four artifacts daily (music, image, text, framing) around ~7 day thematic "arcs."
 
 **Core philosophy:** Formation over education, one intentional encounter per day, no testing/grading/streaks.
 
@@ -53,7 +53,7 @@ Each day delivers exactly four elements that cohere around the current arc theme
 4. **Framing** - 2-3 paragraph introduction connecting to recent days
 
 ### Core Data Collections (Firestore)
-- `arcs` - Thematic journeys (~30 days each with early/middle/late phases)
+- `arcs` - Thematic journeys (~7 days each with early/middle/late phases)
 - `dailyBundles` - Daily content (keyed by YYYY-MM-DD)
 - `exposures` - Tracks shown artifacts to prevent repetition
 - `conversations` - Chat history for each day's bundle
@@ -82,7 +82,7 @@ Triggered on explicit session end or 1 hour inactivity. Extracts: meaningful con
 
 ## Key Constraints
 
-- No artifact may repeat within 30-day window (check exposures)
+- No artifact may repeat within 14-day window (check exposures)
 - All links must be validated before delivery (HEAD request, 200 status)
 - Only one arc active at a time
 - Token limit of ~50k for conversation context

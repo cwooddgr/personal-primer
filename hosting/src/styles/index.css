@@ -134,7 +134,15 @@ body {
   font-family: var(--font-sans);
   font-size: 0.85rem;
   color: var(--color-text-muted);
+  margin-bottom: 0.75rem;
+}
+
+.today-header .arc-description {
+  font-size: 1rem;
+  color: var(--color-text-muted);
+  font-style: italic;
   margin-bottom: 2rem;
+  max-width: none;
 }
 
 /* Artifacts */

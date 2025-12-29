@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { MessageRequest, MessageResponse } from '../types';
-import { getBundle, getActiveArc, getTodayId } from '../utils/firestore';
+import { getBundle, getActiveArc, validateDateId } from '../utils/firestore';
 import { handleMessage } from '../services/conversationManager';
 
 function getErrorMessage(error: unknown): string {
@@ -18,14 +18,14 @@ function getErrorMessage(error: unknown): string {
 
 export async function handlePostMessage(req: Request, res: Response): Promise<void> {
   try {
-    const { message } = req.body as MessageRequest;
+    const { message, date } = req.body as MessageRequest;
 
     if (!message || typeof message !== 'string') {
       res.status(400).json({ error: 'Message is required' });
       return;
     }
 
-    const todayId = getTodayId();
+    const todayId = validateDateId(date);
     const bundle = await getBundle(todayId);
 
     if (!bundle) {

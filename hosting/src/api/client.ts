@@ -90,21 +90,34 @@ export interface MessageResponse {
   sessionShouldEnd?: boolean;
 }
 
+// Helper to get local date in YYYY-MM-DD format
+function getLocalDate(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 // API functions
 export async function getToday(): Promise<TodayResponse> {
-  return fetchAPI<TodayResponse>('/today');
+  const localDate = getLocalDate();
+  return fetchAPI<TodayResponse>(`/today?date=${localDate}`);
 }
 
 export async function sendMessage(message: string): Promise<MessageResponse> {
+  const localDate = getLocalDate();
   return fetchAPI<MessageResponse>('/today/message', {
     method: 'POST',
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, date: localDate }),
   });
 }
 
 export async function endSession(): Promise<void> {
+  const localDate = getLocalDate();
   return fetchAPI<void>('/today/end-session', {
     method: 'POST',
+    body: JSON.stringify({ date: localDate }),
   });
 }
 

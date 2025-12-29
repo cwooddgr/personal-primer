@@ -113,6 +113,7 @@ export interface TodayResponse {
 
 export interface MessageRequest {
   message: string;
+  date: string;
 }
 
 export interface MessageResponse {

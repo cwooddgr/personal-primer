@@ -1,10 +1,11 @@
 import { Request, Response } from 'express';
-import { getBundle, getTodayId } from '../utils/firestore';
+import { getBundle, validateDateId } from '../utils/firestore';
 import { extractAndEndSession } from '../services/insightExtractor';
 
 export async function handleEndSession(req: Request, res: Response): Promise<void> {
   try {
-    const todayId = getTodayId();
+    const { date } = req.body as { date: string };
+    const todayId = validateDateId(date);
     const bundle = await getBundle(todayId);
 
     if (!bundle) {

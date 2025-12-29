@@ -14,7 +14,6 @@ import {
   calculateDayInArc,
   determinePhase,
   updateArcPhase,
-  getTodayId,
   toTimestamp,
 } from '../utils/firestore';
 import { generateJSON } from './anthropic';
@@ -93,7 +92,7 @@ Select today's artifacts and write the framing text. Return as JSON:
 }`;
 }
 
-export async function generateDailyBundle(): Promise<DailyBundle> {
+export async function generateDailyBundle(bundleId: string): Promise<DailyBundle> {
   // Step 1: Gather context
   const arc = await getActiveArc();
   if (!arc) {
@@ -132,7 +131,6 @@ export async function generateDailyBundle(): Promise<DailyBundle> {
   );
 
   // Step 4: Build and persist bundle
-  const bundleId = getTodayId();
   const now = toTimestamp(new Date());
 
   const bundle: DailyBundle = {

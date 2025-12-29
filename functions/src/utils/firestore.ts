@@ -27,19 +27,22 @@ export const collections = {
 };
 
 // Date helpers
-// Use US/Mountain timezone (Salt Lake City) for date calculations
-const TIMEZONE = 'America/Denver';
+// Validate and return a date string in YYYY-MM-DD format
+export function validateDateId(dateStr: string | undefined): string {
+  if (!dateStr) {
+    throw new Error('Date parameter is required');
+  }
+  // Validate format YYYY-MM-DD
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    throw new Error('Invalid date format. Expected YYYY-MM-DD');
+  }
+  return dateStr;
+}
 
+// Legacy function for backward compatibility (uses UTC)
 export function getTodayId(): string {
   const now = new Date();
-  // Format date in the configured timezone
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TIMEZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  return formatter.format(now); // YYYY-MM-DD
+  return now.toISOString().split('T')[0];
 }
 
 export function toTimestamp(date: Date): Timestamp {

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { TodayResponse } from '../types';
-import { getBundle, getConversation, getActiveArc, getTodayId } from '../utils/firestore';
+import { getBundle, getConversation, getActiveArc, validateDateId } from '../utils/firestore';
 import { generateDailyBundle } from '../services/bundleGenerator';
 
 function getErrorMessage(error: unknown): string {
@@ -26,13 +26,13 @@ function getErrorMessage(error: unknown): string {
 
 export async function handleGetToday(req: Request, res: Response): Promise<void> {
   try {
-    const todayId = getTodayId();
+    const todayId = validateDateId(req.query.date as string);
 
     // Get or generate today's bundle
     let bundle = await getBundle(todayId);
 
     if (!bundle) {
-      bundle = await generateDailyBundle();
+      bundle = await generateDailyBundle(todayId);
     }
 
     // Get conversation if any

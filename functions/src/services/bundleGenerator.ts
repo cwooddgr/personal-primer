@@ -60,16 +60,30 @@ function buildSelectionUserPrompt(
     .filter(s => s)
     .join('\n');
 
-  return `CURRENT ARC: ${arc.theme}
+  const isLastDay = dayInArc >= arc.targetDurationDays;
+
+  let prompt = `CURRENT ARC: ${arc.theme}
 ${arc.description}
 
-Day ${dayInArc} of ~${arc.targetDurationDays} (${arc.currentPhase} phase)
+Day ${dayInArc} of ~${arc.targetDurationDays} (${arc.currentPhase} phase)${isLastDay ? ' — FINAL DAY' : ''}
 
 RECENT EXPOSURES (do NOT repeat these):
 ${exposureList || '(none yet)'}
 
 RECENT USER INSIGHTS:
-${insightsSummary || '(no insights recorded yet)'}
+${insightsSummary || '(no insights recorded yet)'}`;
+
+  if (isLastDay) {
+    prompt += `
+
+IMPORTANT: This is the FINAL DAY of the "${arc.theme}" arc. The framing text should:
+- Acknowledge this is a concluding encounter for this theme
+- Draw threads together from the arc's journey without being heavy-handed
+- Create a sense of gentle closure while leaving doors open
+- Maintain the tone of quiet curiosity, not a lecture or summary`;
+  }
+
+  prompt += `
 
 Select today's artifacts and write the framing text. Return as JSON:
 {
@@ -90,6 +104,8 @@ Select today's artifacts and write the framing text. Return as JSON:
   },
   "framingText": "2-3 paragraphs introducing today's encounter"
 }`;
+
+  return prompt;
 }
 
 export async function generateDailyBundle(bundleId: string): Promise<DailyBundle> {

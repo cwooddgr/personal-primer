@@ -76,6 +76,38 @@ export async function updateArcPhase(arcId: string, phase: Arc['currentPhase']):
   await collections.arcs.doc(arcId).update({ currentPhase: phase });
 }
 
+export async function completeArc(arcId: string): Promise<void> {
+  await collections.arcs.doc(arcId).update({
+    completedDate: toTimestamp(new Date()),
+  });
+}
+
+export async function createArc(arc: Omit<Arc, 'id'>): Promise<Arc> {
+  // Generate a unique ID based on timestamp
+  const id = `arc-${Date.now()}`;
+  const newArc: Arc = { id, ...arc };
+  await collections.arcs.doc(id).set(newArc);
+  return newArc;
+}
+
+export async function getArcBundles(arcId: string): Promise<DailyBundle[]> {
+  const snapshot = await collections.dailyBundles
+    .where('arcId', '==', arcId)
+    .orderBy('date', 'asc')
+    .get();
+
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DailyBundle));
+}
+
+export async function getArcInsights(arcId: string): Promise<SessionInsights[]> {
+  const snapshot = await collections.sessionInsights
+    .where('arcId', '==', arcId)
+    .orderBy('date', 'asc')
+    .get();
+
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SessionInsights));
+}
+
 // Bundle operations
 export async function getBundle(bundleId: string): Promise<DailyBundle | null> {
   const doc = await collections.dailyBundles.doc(bundleId).get();

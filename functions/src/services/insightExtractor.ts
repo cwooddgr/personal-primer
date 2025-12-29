@@ -3,6 +3,7 @@ import {
   Conversation,
   SessionInsights,
   SuggestedReading,
+  ArcCompletionData,
   LLMInsightsExtraction,
 } from '../types';
 import {
@@ -11,10 +12,13 @@ import {
   createSessionInsights,
   updateBundleSuggestedReading,
   getActiveArc,
+  calculateDayInArc,
+  completeArc,
   toTimestamp,
 } from '../utils/firestore';
 import { generateJSON } from './anthropic';
 import { resolveReadingUrl } from './linkValidator';
+import { generateArcCompletion } from './arcGenerator';
 
 const EXTRACTION_SYSTEM_PROMPT = `You extract insights from Personal Primer conversations.
 
@@ -133,24 +137,49 @@ export async function extractInsights(bundleId: string, bundle: DailyBundle): Pr
   return { insights, suggestedReading };
 }
 
-export async function extractAndEndSession(bundleId: string, bundle: DailyBundle): Promise<SuggestedReading | null> {
+export interface EndSessionResult {
+  suggestedReading: SuggestedReading | null;
+  arcCompletion: ArcCompletionData | null;
+}
+
+export async function extractAndEndSession(bundleId: string, bundle: DailyBundle): Promise<EndSessionResult> {
   const conversation = await getConversation(bundleId);
 
   if (!conversation) {
-    return null;
+    return { suggestedReading: null, arcCompletion: null };
   }
 
   if (conversation.sessionEnded) {
     // Already ended - return existing suggested reading if any
-    return bundle.suggestedReading || null;
+    return { suggestedReading: bundle.suggestedReading || null, arcCompletion: null };
   }
+
+  let suggestedReading: SuggestedReading | null = null;
+  let arcCompletion: ArcCompletionData | null = null;
 
   if (conversation.messages.length > 0) {
     const result = await extractInsights(bundleId, bundle);
-    return result?.suggestedReading || null;
+    suggestedReading = result?.suggestedReading || null;
   } else {
     // No messages, just mark as ended
     await updateConversation(bundleId, { sessionEnded: true });
-    return null;
   }
+
+  // Check if this is the last day of the arc
+  const arc = await getActiveArc();
+  if (arc) {
+    const dayInArc = calculateDayInArc(arc);
+    if (dayInArc >= arc.targetDurationDays) {
+      console.log(`Arc "${arc.theme}" completed on day ${dayInArc}. Generating summary and next arc...`);
+
+      // Generate arc summary and create next arc
+      arcCompletion = await generateArcCompletion(arc);
+
+      // Mark the current arc as completed
+      await completeArc(arc.id);
+      console.log(`Marked arc "${arc.theme}" as completed`);
+    }
+  }
+
+  return { suggestedReading, arcCompletion };
 }

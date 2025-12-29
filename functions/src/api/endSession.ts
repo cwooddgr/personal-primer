@@ -18,11 +18,12 @@ export async function handleEndSession(req: Request, res: Response): Promise<voi
       return;
     }
 
-    const suggestedReading = await extractAndEndSession(todayId, bundle);
+    const result = await extractAndEndSession(todayId, bundle);
 
     const response: EndSessionResponse = {
       success: true,
-      suggestedReading: suggestedReading || undefined,
+      suggestedReading: result.suggestedReading || undefined,
+      arcCompletion: result.arcCompletion || undefined,
     };
 
     res.json(response);

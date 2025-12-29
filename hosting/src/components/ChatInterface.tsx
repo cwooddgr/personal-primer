@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import Markdown from 'react-markdown';
-import { sendMessage, endSession, Conversation, ConversationMessage, SuggestedReading } from '../api/client';
+import { sendMessage, endSession, Conversation, ConversationMessage, SuggestedReading, ArcCompletionData } from '../api/client';
 
 interface ChatInterfaceProps {
   initialConversation: Conversation | null;
@@ -17,6 +17,7 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
   const [sessionEnded, setSessionEnded] = useState(initialSessionEnded);
   const [ending, setEnding] = useState(false);
   const [suggestedReading, setSuggestedReading] = useState<SuggestedReading | undefined>(initialSuggestedReading);
+  const [arcCompletion, setArcCompletion] = useState<ArcCompletionData | undefined>();
 
   const handleSend = async () => {
     if (!input.trim() || sending || sessionEnded) return;
@@ -40,6 +41,9 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
           if (endResponse.suggestedReading) {
             setSuggestedReading(endResponse.suggestedReading);
           }
+          if (endResponse.arcCompletion) {
+            setArcCompletion(endResponse.arcCompletion);
+          }
         } catch (endError) {
           console.error('Failed to auto-end session:', endError);
         }
@@ -62,6 +66,9 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
       setSessionEnded(true);
       if (response.suggestedReading) {
         setSuggestedReading(response.suggestedReading);
+      }
+      if (response.arcCompletion) {
+        setArcCompletion(response.arcCompletion);
       }
     } catch (error) {
       console.error('Failed to end session:', error);
@@ -109,6 +116,21 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
       {sessionEnded ? (
         <div className="session-ended-container">
           <p className="session-ended">Session ended</p>
+
+          {arcCompletion && (
+            <div className="arc-completion">
+              <div className="arc-summary">
+                <p className="arc-completion-label">Arc Complete</p>
+                <Markdown>{arcCompletion.summary}</Markdown>
+              </div>
+              <div className="next-arc-preview">
+                <p className="next-arc-label">Coming tomorrow</p>
+                <p className="next-arc-theme">{arcCompletion.nextArc.theme}</p>
+                <p className="next-arc-description">{arcCompletion.nextArc.description}</p>
+              </div>
+            </div>
+          )}
+
           {suggestedReading && (
             <div className="suggested-reading">
               <p className="suggested-reading-label">Further reading</p>

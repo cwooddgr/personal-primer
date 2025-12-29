@@ -416,6 +416,63 @@ body {
   line-height: 1.5;
 }
 
+/* Arc Completion */
+.arc-completion {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f8f7f5 0%, #f0eeeb 100%);
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+}
+
+.arc-summary {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.arc-completion-label {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-accent);
+  margin-bottom: 0.75rem;
+}
+
+.arc-summary p {
+  margin-bottom: 0.75rem;
+}
+
+.arc-summary p:last-child {
+  margin-bottom: 0;
+}
+
+.next-arc-preview {
+  text-align: left;
+}
+
+.next-arc-label {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.next-arc-theme {
+  font-size: 1.25rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.next-arc-description {
+  font-size: 0.95rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
 /* Arc View */
 .arc-view {
   text-align: center;

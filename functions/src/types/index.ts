@@ -10,6 +10,14 @@ export interface Arc {
   completedDate?: Timestamp;
 }
 
+export interface ArcCompletionData {
+  summary: string;
+  nextArc: {
+    theme: string;
+    description: string;
+  };
+}
+
 export interface SuggestedReading {
   title: string;
   url: string;
@@ -143,6 +151,7 @@ export interface ReactRequest {
 export interface EndSessionResponse {
   success: boolean;
   suggestedReading?: SuggestedReading;
+  arcCompletion?: ArcCompletionData;
 }
 
 export interface HistoryQuery {

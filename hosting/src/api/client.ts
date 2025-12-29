@@ -49,6 +49,14 @@ export interface SuggestedReading {
   rationale: string;
 }
 
+export interface ArcCompletionData {
+  summary: string;
+  nextArc: {
+    theme: string;
+    description: string;
+  };
+}
+
 export interface DailyBundle {
   id: string;
   arcId: string;
@@ -100,6 +108,7 @@ export interface MessageResponse {
 export interface EndSessionResponse {
   success: boolean;
   suggestedReading?: SuggestedReading;
+  arcCompletion?: ArcCompletionData;
 }
 
 // Helper to get local date in YYYY-MM-DD format

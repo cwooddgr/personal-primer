@@ -94,6 +94,44 @@ function trimMessagesToFit(messages: ChatMessage[], maxTokens: number): ChatMess
 
 const END_SESSION_MARKER = '{{END_SESSION}}';
 
+// Fallback detection patterns
+const USER_ENDING_PATTERNS = [
+  /let'?s?\s+end/i,
+  /that'?s?\s+all\s+for\s+today/i,
+  /goodbye/i,
+  /good\s*bye/i,
+  /end\s+(here|there|now|the\s+session)/i,
+  /stop\s+(here|there|now)/i,
+  /i('?m|\s+am)\s+(done|finished)/i,
+  /until\s+(next\s+time|tomorrow)/i,
+  /signing\s+off/i,
+];
+
+const ASSISTANT_FAREWELL_PATTERNS = [
+  /take\s+care/i,
+  /until\s+(next\s+time|tomorrow|then)/i,
+  /see\s+you/i,
+  /farewell/i,
+  /goodbye/i,
+  /good\s*bye/i,
+  /have\s+a\s+(good|great|wonderful|lovely)/i,
+  /rest\s+well/i,
+  /be\s+well/i,
+];
+
+function detectSessionEnd(userMessage: string, assistantResponse: string): boolean {
+  // Primary: check for explicit marker
+  if (assistantResponse.includes(END_SESSION_MARKER)) {
+    return true;
+  }
+
+  // Fallback: check if user signaled ending AND assistant responded with farewell
+  const userWantsToEnd = USER_ENDING_PATTERNS.some(pattern => pattern.test(userMessage));
+  const assistantSaidFarewell = ASSISTANT_FAREWELL_PATTERNS.some(pattern => pattern.test(assistantResponse));
+
+  return userWantsToEnd && assistantSaidFarewell;
+}
+
 export async function handleMessage(
   userMessage: string,
   bundle: DailyBundle,
@@ -132,10 +170,14 @@ export async function handleMessage(
   const systemPrompt = buildConversationSystemPrompt(bundle, arc, dayInArc, insights);
   let assistantResponse = await chat(systemPrompt, trimmedMessages);
 
-  // Check for session-end marker
-  const sessionShouldEnd = assistantResponse.includes(END_SESSION_MARKER);
-  if (sessionShouldEnd) {
-    // Strip the marker from the response
+  // Detect if session should end (marker or pattern matching)
+  const sessionShouldEnd = detectSessionEnd(userMessage, assistantResponse);
+  console.log('User message:', userMessage);
+  console.log('Response end:', assistantResponse.slice(-100));
+  console.log('Session should end:', sessionShouldEnd);
+
+  // Strip marker if present
+  if (assistantResponse.includes(END_SESSION_MARKER)) {
     assistantResponse = assistantResponse.replace(END_SESSION_MARKER, '').trim();
   }
 

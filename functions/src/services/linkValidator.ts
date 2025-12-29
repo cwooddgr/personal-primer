@@ -170,6 +170,7 @@ async function searchWikimediaCommons(query: string): Promise<{ sourceUrl: strin
     apiUrl.searchParams.set('action', 'query');
     apiUrl.searchParams.set('generator', 'search');
     apiUrl.searchParams.set('gsrsearch', query);
+    apiUrl.searchParams.set('gsrnamespace', '6'); // File namespace only
     apiUrl.searchParams.set('gsrlimit', '5');
     apiUrl.searchParams.set('prop', 'imageinfo');
     apiUrl.searchParams.set('iiprop', 'url');

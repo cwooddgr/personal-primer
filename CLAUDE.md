@@ -13,7 +13,7 @@ Personal Primer is a personal web application that delivers a single, thoughtful
 - **Frontend:** React 18 + Vite (in `hosting/`)
 - **Backend:** Node.js 20 / TypeScript with Firebase Cloud Functions v2 (in `functions/`)
 - **Database:** Firebase Firestore
-- **LLM:** Anthropic Claude API (claude-opus-4-5-20250514) via @anthropic-ai/sdk
+- **LLM:** Anthropic Claude API (claude-opus-4-5-20251101) via @anthropic-ai/sdk
 - **Link Resolution:** Google Custom Search API
 - **Authentication:** Firebase Auth (single user)
 
@@ -53,36 +53,51 @@ Each day delivers exactly four elements that cohere around the current arc theme
 4. **Framing** - 2-3 paragraph introduction connecting to recent days
 
 ### Core Data Collections (Firestore)
-- `arcs` - Thematic journeys (~7 days each with early/middle/late phases)
-- `dailyBundles` - Daily content (keyed by YYYY-MM-DD)
-- `exposures` - Tracks shown artifacts to prevent repetition
-- `conversations` - Chat history for each day's bundle
+- `arcs` - Thematic journeys (~7 days each with early/middle/late phases, includes `completedDate` when finished)
+- `dailyBundles` - Daily content (keyed by YYYY-MM-DD, includes optional `suggestedReading`)
+- `exposures` - Tracks shown artifacts to prevent repetition (includes `creator` to avoid same-creator bundles)
+- `conversations` - Chat history for each day's bundle (includes `sessionEnded` flag)
 - `sessionInsights` - Extracted learnings from conversations
 - `userReactions` - User feedback on artifacts
 
 ### API Endpoints
-- `GET /api/today` - Returns today's bundle (generates if needed)
-- `POST /api/today/message` - Send conversation message
-- `POST /api/today/end-session` - End session, extract insights
+- `GET /api/today` - Returns today's bundle (generates if needed), includes arc info and day/phase
+- `POST /api/today/message` - Send conversation message (returns `sessionShouldEnd` flag for smart ending)
+- `POST /api/today/end-session` - End session, extract insights (returns `suggestedReading` and `arcCompletion` if final day)
 - `POST /api/today/react` - Record reaction to artifact
 - `GET /api/arc` - Get current arc
 - `GET /api/history` - Past bundles (paginated)
 
 ### Bundle Generation Flow
-1. Gather context (arc, recent exposures, insights)
-2. LLM selects artifacts with search queries
-3. Resolve and validate links (Apple Music, museum URLs)
-4. Persist bundle and exposure records
+1. Gather context (arc, recent exposures, insights, recent creators)
+2. Calculate day in arc and phase (early/middle/late)
+3. LLM selects artifacts with search queries (avoids same creators as recent days)
+4. On final day of arc, special framing instructions prompt closure
+5. Resolve and validate links (Apple Music, museum URLs)
+6. Persist bundle and exposure records (including creator info)
 
 ### Conversation Context
 System prompts include: today's artifacts, current arc info, user insights from past sessions. Guide tone is curious companion, not instructor.
 
 ### Insight Extraction
-Triggered on explicit session end or 1 hour inactivity. Extracts: meaningful connections, revealed interests, personal context, items to revisit.
+Triggered on explicit session end, smart session-end detection, or 1 hour inactivity. Extracts: meaningful connections, revealed interests, personal context, items to revisit, and suggested reading (with resolved URL).
+
+### Smart Session-End Detection
+The system detects natural conversation endings via:
+1. **Explicit marker:** Assistant adds `{{END_SESSION}}` when user signals ending
+2. **Pattern matching:** User ending signals ("goodbye", "let's end", "that's all") combined with assistant farewells ("take care", "see you")
+
+### Arc Completion & Transition
+When the final day of an arc ends:
+1. LLM generates 2-3 paragraph retrospective summary of the arc journey
+2. New arc theme and description generated based on user's revealed interests
+3. New arc automatically created and becomes active
+4. Frontend displays arc completion summary and "coming tomorrow" preview
 
 ## Key Constraints
 
 - No artifact may repeat within 14-day window (check exposures)
+- No creator may repeat within recent bundles (check exposure creators)
 - All links must be validated before delivery (HEAD request, 200 status)
 - Only one arc active at a time
 - Token limit of ~50k for conversation context
@@ -90,12 +105,14 @@ Triggered on explicit session end or 1 hour inactivity. Extracts: meaningful con
 ## Key Files
 
 - `functions/src/index.ts` - Cloud Functions entry point, routes all API calls
-- `functions/src/services/bundleGenerator.ts` - Generates daily bundles via LLM
-- `functions/src/services/conversationManager.ts` - Handles chat with context
-- `functions/src/services/insightExtractor.ts` - Extracts insights from conversations
+- `functions/src/services/bundleGenerator.ts` - Generates daily bundles via LLM (includes final day handling)
+- `functions/src/services/conversationManager.ts` - Handles chat with context and session-end detection
+- `functions/src/services/insightExtractor.ts` - Extracts insights and suggested reading from conversations
+- `functions/src/services/arcGenerator.ts` - Generates arc completion summaries and creates next arcs
 - `functions/src/services/linkValidator.ts` - Google Custom Search + URL validation
-- `hosting/src/views/TodayView.tsx` - Main daily view
-- `hosting/src/components/ChatInterface.tsx` - Conversation UI
+- `functions/src/scheduled/inactivityCheck.ts` - Scheduled function to end stale sessions (every 15 min)
+- `hosting/src/views/TodayView.tsx` - Main daily view (shows arc description in header)
+- `hosting/src/components/ChatInterface.tsx` - Conversation UI (handles suggested reading and arc completion display)
 
 ## First-Time Setup
 

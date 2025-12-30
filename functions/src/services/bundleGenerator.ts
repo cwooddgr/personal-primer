@@ -24,6 +24,7 @@ const BUNDLE_SELECTION_SYSTEM_PROMPT = `You are the curator for Personal Primer,
 Your role is to select today's artifacts: one piece of music, one image, and one quote or literary excerpt. All three should cohere around the current arc theme and be appropriate for the arc phase.
 
 You must NOT select any artifact that appears in the recent exposure list.
+You must also NOT select work by any creator (artist, composer, author) who appears in the recent creators list—variety of voices matters.
 
 After selecting, you will write a short framing text (2-3 paragraphs) that:
 - Introduces the day's theme
@@ -42,6 +43,23 @@ function buildSelectionUserPrompt(
   const exposureList = exposures
     .map(e => `- [${e.artifactType}] ${e.artifactIdentifier}`)
     .join('\n');
+
+  // Extract unique creators by type
+  const creatorsByType = {
+    music: new Set<string>(),
+    image: new Set<string>(),
+    text: new Set<string>(),
+  };
+  for (const e of exposures) {
+    if (e.creator) {
+      creatorsByType[e.artifactType].add(e.creator);
+    }
+  }
+  const recentCreators = [
+    ...Array.from(creatorsByType.music).map(c => `- [music] ${c}`),
+    ...Array.from(creatorsByType.image).map(c => `- [image] ${c}`),
+    ...Array.from(creatorsByType.text).map(c => `- [text] ${c}`),
+  ].join('\n');
 
   const insightsSummary = insights
     .map(i => {
@@ -69,6 +87,9 @@ Day ${dayInArc} of ~${arc.targetDurationDays} (${arc.currentPhase} phase)${isLas
 
 RECENT EXPOSURES (do NOT repeat these):
 ${exposureList || '(none yet)'}
+
+RECENT CREATORS (do NOT use work by these artists/authors):
+${recentCreators || '(none yet)'}
 
 RECENT USER INSIGHTS:
 ${insightsSummary || '(no insights recorded yet)'}`;
@@ -185,16 +206,19 @@ export async function generateDailyBundle(bundleId: string): Promise<DailyBundle
       ...exposureBase,
       artifactType: 'music',
       artifactIdentifier: `${selection.music.title} - ${selection.music.artist}`,
+      creator: selection.music.artist,
     }),
     createExposure({
       ...exposureBase,
       artifactType: 'image',
       artifactIdentifier: `${selection.image.title} - ${selection.image.artist}`,
+      creator: selection.image.artist,
     }),
     createExposure({
       ...exposureBase,
       artifactType: 'text',
       artifactIdentifier: `${selection.text.source} - ${selection.text.author}`,
+      creator: selection.text.author,
     }),
   ]);
 

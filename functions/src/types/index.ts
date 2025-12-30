@@ -53,6 +53,7 @@ export interface Exposure {
   id: string;
   artifactType: 'music' | 'image' | 'text';
   artifactIdentifier: string; // Canonical identifier (title + artist/author)
+  creator: string; // Artist, composer, or author name
   dateShown: Timestamp;
   arcId: string;
 }

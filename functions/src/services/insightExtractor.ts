@@ -65,7 +65,7 @@ Extract insights and return as JSON:
   "suggestedReading": {
     "title": "exact title of the Wikipedia article, paper, or book",
     "searchQuery": "search query to find this resource online",
-    "rationale": "1-2 sentences explaining why this connects to the user's interests"
+    "rationale": "1-2 sentences (addressing the user as 'you') explaining why this connects to their interests"
   }
 }
 

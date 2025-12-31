@@ -35,6 +35,7 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
 
       // Auto-end session if Claude detected user wants to end
       if (response.sessionShouldEnd) {
+        setEnding(true);
         try {
           const endResponse = await endSession();
           setSessionEnded(true);
@@ -46,6 +47,8 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
           }
         } catch (endError) {
           console.error('Failed to auto-end session:', endError);
+        } finally {
+          setEnding(false);
         }
       }
     } catch (error) {

@@ -47,7 +47,7 @@ function ArcView() {
         <p className="arc-phase">{arc.currentPhase} phase</p>
       </header>
 
-      <p className="arc-description">{arc.description}</p>
+      {arc.description && <p className="arc-description">{arc.description}</p>}
 
       <div className="arc-progress">
         <p className="day-count">

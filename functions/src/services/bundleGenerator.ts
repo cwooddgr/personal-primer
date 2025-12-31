@@ -19,12 +19,18 @@ import {
 import { generateJSON } from './anthropic';
 import { resolveAppleMusicLink, resolveImageLink } from './linkValidator';
 
+const MAX_MUSIC_RETRIES = 3;
+
 const BUNDLE_SELECTION_SYSTEM_PROMPT = `You are the curator for Personal Primer, a daily intellectual formation guide.
 
 Your role is to select today's artifacts: one piece of music, one image, and one quote or literary excerpt. All three should cohere around the current arc theme and be appropriate for the arc phase.
 
-You must NOT select any artifact that appears in the recent exposure list.
-You must also NOT select work by any creator (artist, composer, author) who appears in the recent creators list—variety of voices matters.
+CRITICAL RULES:
+- All artifacts must be REAL, EXISTING works—never synthesize, paraphrase, or create original content
+- The text MUST be a verbatim quote from an actual published source (book, essay, poem, speech, etc.)
+- NEVER attribute text to "synthesis", "adaptation", "after [author]", or similar—only use exact quotes with accurate attribution
+- You must NOT select any artifact that appears in the recent exposure list
+- You must NOT select work by any creator who appears in the recent creators list—variety of voices matters
 
 After selecting, you will write a short framing text (2-3 paragraphs) that:
 - Introduces the day's theme
@@ -33,6 +39,45 @@ After selecting, you will write a short framing text (2-3 paragraphs) that:
 - Maintains a tone of quiet curiosity, not instruction
 
 You are a curator and narrator, not a teacher. Point, don't explain. Evoke, don't lecture.`;
+
+const ALTERNATIVE_MUSIC_SYSTEM_PROMPT = `You are the curator for Personal Primer. A previously selected music piece could not be found on Apple Music. Suggest an alternative that:
+- Fits the same thematic role in the arc
+- Is likely to be available on Apple Music (prefer well-known recordings)
+- Is by a DIFFERENT artist than the failed selection
+
+Return ONLY a JSON object with the new music selection.`;
+
+interface MusicSelection {
+  title: string;
+  artist: string;
+  searchQuery: string;
+}
+
+function buildAlternativeMusicPrompt(
+  arc: Arc,
+  failedSelections: MusicSelection[],
+  originalFramingText: string
+): string {
+  const failedList = failedSelections
+    .map(s => `- "${s.title}" by ${s.artist}`)
+    .join('\n');
+
+  return `CURRENT ARC: ${arc.theme}
+${arc.description}
+
+FRAMING CONTEXT (for reference):
+${originalFramingText.slice(0, 500)}...
+
+MUSIC SELECTIONS THAT FAILED (not on Apple Music):
+${failedList}
+
+Suggest an alternative music piece that fits the theme. Return as JSON:
+{
+  "title": "exact title of the piece",
+  "artist": "composer or performer",
+  "searchQuery": "search query to find this on Apple Music"
+}`;
+}
 
 function buildSelectionUserPrompt(
   arc: Arc,
@@ -154,12 +199,37 @@ export async function generateDailyBundle(bundleId: string): Promise<DailyBundle
     buildSelectionUserPrompt(arc, dayInArc, exposures, insights)
   );
 
-  // Step 3: Link resolution
-  const musicLink = await resolveAppleMusicLink(
-    selection.music.title,
-    selection.music.artist,
-    selection.music.searchQuery
+  // Step 3: Link resolution with retry for music
+  let musicSelection = selection.music;
+  let musicLink = await resolveAppleMusicLink(
+    musicSelection.title,
+    musicSelection.artist,
+    musicSelection.searchQuery
   );
+
+  // Retry with alternative music if link not found
+  const failedMusicSelections: MusicSelection[] = [];
+  while (!musicLink && failedMusicSelections.length < MAX_MUSIC_RETRIES) {
+    console.log(`Music not found on Apple Music: "${musicSelection.title}" by ${musicSelection.artist}. Requesting alternative...`);
+    failedMusicSelections.push(musicSelection);
+
+    const alternative = await generateJSON<MusicSelection>(
+      ALTERNATIVE_MUSIC_SYSTEM_PROMPT,
+      buildAlternativeMusicPrompt(arc, failedMusicSelections, selection.framingText)
+    );
+
+    console.log(`Trying alternative: "${alternative.title}" by ${alternative.artist}`);
+    musicSelection = alternative;
+    musicLink = await resolveAppleMusicLink(
+      alternative.title,
+      alternative.artist,
+      alternative.searchQuery
+    );
+  }
+
+  if (!musicLink) {
+    console.warn(`Failed to find Apple Music link after ${MAX_MUSIC_RETRIES} retries. Using last selection without link.`);
+  }
 
   const imageLink = await resolveImageLink(
     selection.image.title,
@@ -175,8 +245,8 @@ export async function generateDailyBundle(bundleId: string): Promise<DailyBundle
     date: now,
     arcId: arc.id,
     music: {
-      title: selection.music.title,
-      artist: selection.music.artist,
+      title: musicSelection.title,
+      artist: musicSelection.artist,
       appleMusicUrl: musicLink?.appleMusicUrl || '',
     },
     image: {
@@ -205,8 +275,8 @@ export async function generateDailyBundle(bundleId: string): Promise<DailyBundle
     createExposure({
       ...exposureBase,
       artifactType: 'music',
-      artifactIdentifier: `${selection.music.title} - ${selection.music.artist}`,
-      creator: selection.music.artist,
+      artifactIdentifier: `${musicSelection.title} - ${musicSelection.artist}`,
+      creator: musicSelection.artist,
     }),
     createExposure({
       ...exposureBase,

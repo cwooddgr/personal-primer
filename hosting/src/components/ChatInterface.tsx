@@ -144,6 +144,10 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
             </div>
           )}
         </div>
+      ) : ending ? (
+        <div className="chat-input-area">
+          <p className="ending-message">Ending session...</p>
+        </div>
       ) : (
         <div className="chat-input-area">
           <textarea
@@ -160,10 +164,10 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
             </button>
             <button
               onClick={handleEndSession}
-              disabled={ending || messages.length === 0}
+              disabled={messages.length === 0}
               className="end-session"
             >
-              {ending ? 'Ending...' : 'End Session'}
+              End Session
             </button>
           </div>
         </div>

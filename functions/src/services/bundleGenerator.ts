@@ -20,6 +20,7 @@ import { generateJSON } from './anthropic';
 import { resolveAppleMusicLink, resolveImageLink } from './linkValidator';
 
 const MAX_MUSIC_RETRIES = 3;
+const MAX_IMAGE_RETRIES = 3;
 
 const BUNDLE_SELECTION_SYSTEM_PROMPT = `You are the curator for Personal Primer, a daily intellectual formation guide.
 
@@ -76,6 +77,45 @@ Suggest an alternative music piece that fits the theme. Return as JSON:
   "title": "exact title of the piece",
   "artist": "composer or performer",
   "searchQuery": "search query to find this on Apple Music"
+}`;
+}
+
+const ALTERNATIVE_IMAGE_SYSTEM_PROMPT = `You are the curator for Personal Primer. A previously selected artwork could not be found on Wikimedia Commons or museum sites. Suggest an alternative that:
+- Fits the same thematic role in the arc
+- Is a well-known artwork likely to be on Wikimedia Commons (prefer famous paintings, sculptures, or photographs)
+- Is by a DIFFERENT artist than the failed selection
+
+Return ONLY a JSON object with the new image selection.`;
+
+interface ImageSelection {
+  title: string;
+  artist: string;
+  searchQuery: string;
+}
+
+function buildAlternativeImagePrompt(
+  arc: Arc,
+  failedSelections: ImageSelection[],
+  originalFramingText: string
+): string {
+  const failedList = failedSelections
+    .map(s => `- "${s.title}" by ${s.artist}`)
+    .join('\n');
+
+  return `CURRENT ARC: ${arc.theme}
+${arc.description}
+
+FRAMING CONTEXT (for reference):
+${originalFramingText.slice(0, 500)}...
+
+IMAGE SELECTIONS THAT FAILED (not found online):
+${failedList}
+
+Suggest an alternative artwork that fits the theme. Return as JSON:
+{
+  "title": "exact title of the artwork",
+  "artist": "artist name",
+  "searchQuery": "search query to find this on Wikimedia Commons"
 }`;
 }
 
@@ -231,11 +271,37 @@ export async function generateDailyBundle(bundleId: string): Promise<DailyBundle
     console.warn(`Failed to find Apple Music link after ${MAX_MUSIC_RETRIES} retries. Using last selection without link.`);
   }
 
-  const imageLink = await resolveImageLink(
-    selection.image.title,
-    selection.image.artist,
-    selection.image.searchQuery
+  // Image link resolution with retry
+  let imageSelection = selection.image;
+  let imageLink = await resolveImageLink(
+    imageSelection.title,
+    imageSelection.artist,
+    imageSelection.searchQuery
   );
+
+  // Retry with alternative image if link not found
+  const failedImageSelections: ImageSelection[] = [];
+  while (!imageLink && failedImageSelections.length < MAX_IMAGE_RETRIES) {
+    console.log(`Image not found: "${imageSelection.title}" by ${imageSelection.artist}. Requesting alternative...`);
+    failedImageSelections.push(imageSelection);
+
+    const alternative = await generateJSON<ImageSelection>(
+      ALTERNATIVE_IMAGE_SYSTEM_PROMPT,
+      buildAlternativeImagePrompt(arc, failedImageSelections, selection.framingText)
+    );
+
+    console.log(`Trying alternative image: "${alternative.title}" by ${alternative.artist}`);
+    imageSelection = alternative;
+    imageLink = await resolveImageLink(
+      alternative.title,
+      alternative.artist,
+      alternative.searchQuery
+    );
+  }
+
+  if (!imageLink) {
+    console.warn(`Failed to find image link after ${MAX_IMAGE_RETRIES} retries. Using last selection without link.`);
+  }
 
   // Step 4: Build and persist bundle
   const now = toTimestamp(new Date());
@@ -250,8 +316,8 @@ export async function generateDailyBundle(bundleId: string): Promise<DailyBundle
       appleMusicUrl: musicLink?.appleMusicUrl || '',
     },
     image: {
-      title: selection.image.title,
-      artist: selection.image.artist,
+      title: imageSelection.title,
+      artist: imageSelection.artist,
       sourceUrl: imageLink?.sourceUrl || '',
       imageUrl: imageLink?.imageUrl || '',
     },
@@ -281,8 +347,8 @@ export async function generateDailyBundle(bundleId: string): Promise<DailyBundle
     createExposure({
       ...exposureBase,
       artifactType: 'image',
-      artifactIdentifier: `${selection.image.title} - ${selection.image.artist}`,
-      creator: selection.image.artist,
+      artifactIdentifier: `${imageSelection.title} - ${imageSelection.artist}`,
+      creator: imageSelection.artist,
     }),
     createExposure({
       ...exposureBase,

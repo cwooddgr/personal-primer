@@ -129,6 +129,25 @@ export interface ResolvedImage {
   imageUrl: string;
 }
 
+async function validateImageUrl(url: string): Promise<boolean> {
+  try {
+    const response = await fetch(url, { method: 'HEAD' });
+    if (!response.ok) {
+      console.log(`Image URL validation failed (${response.status}): ${url}`);
+      return false;
+    }
+    const contentType = response.headers.get('content-type');
+    if (!contentType?.startsWith('image/')) {
+      console.log(`Image URL has wrong content-type (${contentType}): ${url}`);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error(`Image URL validation error for ${url}:`, error);
+    return false;
+  }
+}
+
 // Use Wikimedia API to get image URL from a Wikipedia/Commons page title
 async function getWikimediaImageUrl(pageTitle: string): Promise<string | null> {
   try {
@@ -154,7 +173,12 @@ async function getWikimediaImageUrl(pageTitle: string): Promise<string | null> {
 
     if (thumbnail) {
       // Get a larger version by modifying the URL
-      return thumbnail.replace(/\/\d+px-/, '/800px-');
+      const imageUrl = thumbnail.replace(/\/\d+px-/, '/800px-');
+      const isValid = await validateImageUrl(imageUrl);
+      if (isValid) {
+        return imageUrl;
+      }
+      console.log(`Wikipedia image URL failed validation: ${imageUrl}`);
     }
     return null;
   } catch (error) {
@@ -185,16 +209,20 @@ async function searchWikimediaCommons(query: string): Promise<{ sourceUrl: strin
     const pages = data.query?.pages;
     if (!pages) return null;
 
-    // Find the first image result
+    // Find the first image result with a valid URL
     for (const pageId of Object.keys(pages)) {
       const page = pages[pageId];
       const imageInfo = page?.imageinfo?.[0];
       if (imageInfo?.thumburl) {
         console.log(`Found Wikimedia Commons image: ${imageInfo.thumburl}`);
-        return {
-          sourceUrl: imageInfo.descriptionurl || `https://commons.wikimedia.org/wiki/File:${page.title?.replace('File:', '')}`,
-          imageUrl: imageInfo.thumburl,
-        };
+        const isValid = await validateImageUrl(imageInfo.thumburl);
+        if (isValid) {
+          return {
+            sourceUrl: imageInfo.descriptionurl || `https://commons.wikimedia.org/wiki/File:${page.title?.replace('File:', '')}`,
+            imageUrl: imageInfo.thumburl,
+          };
+        }
+        console.log(`Wikimedia image URL failed validation, trying next result...`);
       }
     }
     return null;

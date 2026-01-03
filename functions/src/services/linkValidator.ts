@@ -171,11 +171,23 @@ async function validateImageUrl(url: string): Promise<boolean> {
       return false;
     }
     const contentType = response.headers.get('content-type');
-    if (!contentType?.startsWith('image/')) {
-      console.log(`[Validate] Wrong content-type (${contentType}): ${url}`);
+
+    // Accept image/* types, octet-stream, or missing content-type (some CDNs don't set it)
+    // Wikimedia Commons URLs are trusted, so we're lenient here
+    const isImage = !contentType ||
+      contentType.startsWith('image/') ||
+      contentType.includes('octet-stream');
+
+    if (!isImage) {
+      console.log(`[Validate] Unexpected content-type (${contentType}): ${url}`);
+      // Still accept it for Wikimedia URLs - let the browser handle it
+      if (url.includes('wikimedia.org') || url.includes('wikipedia.org')) {
+        console.log(`[Validate] Accepting anyway (trusted domain)`);
+        return true;
+      }
       return false;
     }
-    console.log(`[Validate] OK (${contentType}): ${url}`);
+    console.log(`[Validate] OK (${contentType || 'no content-type'}): ${url}`);
     return true;
   } catch (error) {
     console.error(`[Validate] Error for ${url}:`, error);
@@ -259,7 +271,9 @@ async function searchWikimediaCommons(query: string): Promise<{ sourceUrl: strin
 
     const data = await response.json();
     const pages = data.query?.pages;
-    if (!pages) {
+
+    // Check for empty or missing pages (empty object {} is truthy!)
+    if (!pages || Object.keys(pages).length === 0) {
       console.log(`[Commons] No pages found for: "${query}"`);
       return null;
     }
@@ -269,21 +283,29 @@ async function searchWikimediaCommons(query: string): Promise<{ sourceUrl: strin
     // Find the first image result with a valid URL
     for (const pageId of Object.keys(pages)) {
       const page = pages[pageId];
+      console.log(`[Commons] Processing page: ${page.title} (id: ${pageId})`);
+
       const imageInfo = page?.imageinfo?.[0];
-      if (imageInfo?.thumburl) {
-        console.log(`[Commons] Checking image: ${imageInfo.thumburl}`);
-        const isValid = await validateImageUrl(imageInfo.thumburl);
-        if (isValid) {
-          console.log(`[Commons] Valid image found: ${imageInfo.thumburl}`);
-          return {
-            sourceUrl: imageInfo.descriptionurl || `https://commons.wikimedia.org/wiki/File:${page.title?.replace('File:', '')}`,
-            imageUrl: imageInfo.thumburl,
-          };
-        }
-        console.log(`[Commons] Image failed validation, trying next...`);
-      } else {
-        console.log(`[Commons] No thumburl for page: ${page.title}`);
+      if (!imageInfo) {
+        console.log(`[Commons] Page "${page.title}" has no imageinfo array`);
+        continue;
       }
+
+      if (!imageInfo.thumburl) {
+        console.log(`[Commons] Page "${page.title}" imageinfo has no thumburl`);
+        continue;
+      }
+
+      console.log(`[Commons] Checking image: ${imageInfo.thumburl}`);
+      const isValid = await validateImageUrl(imageInfo.thumburl);
+      if (isValid) {
+        console.log(`[Commons] Valid image found: ${imageInfo.thumburl}`);
+        return {
+          sourceUrl: imageInfo.descriptionurl || `https://commons.wikimedia.org/wiki/File:${page.title?.replace('File:', '')}`,
+          imageUrl: imageInfo.thumburl,
+        };
+      }
+      console.log(`[Commons] Image failed validation, trying next...`);
     }
     console.log(`[Commons] No valid images found for: "${query}"`);
     return null;

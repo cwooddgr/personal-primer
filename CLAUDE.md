@@ -53,7 +53,7 @@ Each day delivers exactly four elements that cohere around the current arc theme
 4. **Framing** - 2-3 paragraph introduction connecting to recent days
 
 ### Core Data Collections (Firestore)
-- `arcs` - Thematic journeys (~7 days each with early/middle/late phases, includes `completedDate` when finished)
+- `arcs` - Thematic journeys (~7 bundles each with early/middle/late phases, includes `completedDate` when finished)
 - `dailyBundles` - Daily content (keyed by YYYY-MM-DD, includes optional `suggestedReading`)
 - `exposures` - Tracks shown artifacts to prevent repetition (includes `creator` to avoid same-creator bundles)
 - `conversations` - Chat history for each day's bundle (includes `sessionEnded` flag)
@@ -70,7 +70,7 @@ Each day delivers exactly four elements that cohere around the current arc theme
 
 ### Bundle Generation Flow
 1. Gather context (arc, recent exposures, insights, recent creators)
-2. Calculate day in arc and phase (early/middle/late)
+2. Calculate day in arc (counts bundles generated for this arc, not calendar days) and phase (early/middle/late)
 3. LLM selects artifacts with search queries
 4. On final day of arc, special framing instructions prompt closure
 5. Resolve and validate links with retry logic:
@@ -104,6 +104,7 @@ When the final day of an arc ends:
 - Music/image creators are soft-avoided via LLM instructions (not programmatically enforced)
 - All links must be validated before delivery (HEAD request, 200 status)
 - Only one arc active at a time
+- Arc duration is bundle-count based (skipped days don't advance the arc)
 - Token limit of ~50k for conversation context
 
 ## Key Files

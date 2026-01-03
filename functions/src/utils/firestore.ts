@@ -213,8 +213,8 @@ export async function calculateDayInArc(arc: Arc): Promise<number> {
     .count()
     .get();
 
-  // Day in arc is bundle count + 1 (we're generating the next bundle)
-  return snapshot.data().count + 1;
+  // Return actual bundle count (minimum 1 for display purposes)
+  return Math.max(1, snapshot.data().count);
 }
 
 export function determinePhase(dayInArc: number, targetDuration: number): Arc['currentPhase'] {

@@ -71,9 +71,12 @@ Each day delivers exactly four elements that cohere around the current arc theme
 ### Bundle Generation Flow
 1. Gather context (arc, recent exposures, insights, recent creators)
 2. Calculate day in arc and phase (early/middle/late)
-3. LLM selects artifacts with search queries (avoids same creators as recent days)
+3. LLM selects artifacts with search queries
 4. On final day of arc, special framing instructions prompt closure
-5. Resolve and validate links (Apple Music, museum URLs)
+5. Resolve and validate links with retry logic:
+   - **Music:** Up to 5 retries with iTunes API, uses multiple search strategies (title+artist, artist-only, keyword matching), falls back to any track by same artist if exact match not found
+   - **Image:** Up to 3 retries with Wikimedia Commons API
+   - **Text:** Programmatic validation against recent authors (normalized name comparison), up to 3 retries if author appeared in last 14 days
 6. Persist bundle and exposure records (including creator info)
 
 ### Conversation Context
@@ -97,7 +100,8 @@ When the final day of an arc ends:
 ## Key Constraints
 
 - No artifact may repeat within 14-day window (check exposures)
-- No creator may repeat within recent bundles (check exposure creators)
+- No text author may repeat within 14-day window (programmatically enforced with normalized name comparison, e.g., "T.S. Eliot" = "T. S. Eliot")
+- Music/image creators are soft-avoided via LLM instructions (not programmatically enforced)
 - All links must be validated before delivery (HEAD request, 200 status)
 - Only one arc active at a time
 - Token limit of ~50k for conversation context
@@ -109,7 +113,7 @@ When the final day of an arc ends:
 - `functions/src/services/conversationManager.ts` - Handles chat with context and session-end detection
 - `functions/src/services/insightExtractor.ts` - Extracts insights and suggested reading from conversations
 - `functions/src/services/arcGenerator.ts` - Generates arc completion summaries and creates next arcs
-- `functions/src/services/linkValidator.ts` - Google Custom Search + URL validation
+- `functions/src/services/linkValidator.ts` - iTunes API for music, Wikimedia API for images, Google Custom Search for readings
 - `functions/src/scheduled/inactivityCheck.ts` - Scheduled function to end stale sessions (every 15 min)
 - `hosting/src/views/TodayView.tsx` - Main daily view (shows arc description in header)
 - `hosting/src/components/ChatInterface.tsx` - Conversation UI (handles suggested reading and arc completion display)

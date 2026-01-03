@@ -15,6 +15,22 @@
         { "fieldPath": "sessionEnded", "order": "ASCENDING" },
         { "fieldPath": "lastActivity", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "dailyBundles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "arcId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "sessionInsights",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "arcId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

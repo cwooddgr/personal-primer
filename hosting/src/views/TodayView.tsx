@@ -13,10 +13,19 @@ function TodayView() {
 
   useEffect(() => {
     async function loadToday() {
+      console.log('[TodayView] Loading today data...');
       try {
         const response = await getToday();
+        console.log('[TodayView] Loaded successfully:', {
+          bundleId: response.bundle.id,
+          arcTheme: response.arc.theme,
+          hasConversation: !!response.conversation,
+          messageCount: response.conversation?.messages.length ?? 0,
+          sessionEnded: response.conversation?.sessionEnded ?? false,
+        });
         setData(response);
       } catch (err) {
+        console.error('[TodayView] Load failed:', err);
         setError(err instanceof Error ? err.message : 'Failed to load');
       } finally {
         setLoading(false);

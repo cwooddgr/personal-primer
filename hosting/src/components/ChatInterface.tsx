@@ -9,6 +9,13 @@ interface ChatInterfaceProps {
 }
 
 function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded, initialSuggestedReading }: ChatInterfaceProps) {
+  console.log('[ChatInterface] Init:', {
+    hasConversation: !!initialConversation,
+    messageCount: initialConversation?.messages.length ?? 0,
+    sessionEnded: initialSessionEnded,
+    hasSuggestedReading: !!initialSuggestedReading,
+  });
+
   const [messages, setMessages] = useState<ConversationMessage[]>(
     initialConversation?.messages || []
   );
@@ -20,9 +27,13 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
   const [arcCompletion, setArcCompletion] = useState<ArcCompletionData | undefined>();
 
   const handleSend = async () => {
-    if (!input.trim() || sending || sessionEnded) return;
+    if (!input.trim() || sending || sessionEnded) {
+      console.log('[ChatInterface] handleSend blocked:', { empty: !input.trim(), sending, sessionEnded });
+      return;
+    }
 
     const userMessage = input.trim();
+    console.log('[ChatInterface] Sending message:', userMessage.substring(0, 50) + (userMessage.length > 50 ? '...' : ''));
     setInput('');
     setSending(true);
 
@@ -31,13 +42,22 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
 
     try {
       const response = await sendMessage(userMessage);
+      console.log('[ChatInterface] Message response:', {
+        messageCount: response.conversation.messages.length,
+        sessionShouldEnd: response.sessionShouldEnd,
+      });
       setMessages(response.conversation.messages);
 
       // Auto-end session if Claude detected user wants to end
       if (response.sessionShouldEnd) {
+        console.log('[ChatInterface] Auto-ending session (sessionShouldEnd=true)');
         setEnding(true);
         try {
           const endResponse = await endSession();
+          console.log('[ChatInterface] Auto-end session success:', {
+            hasSuggestedReading: !!endResponse.suggestedReading,
+            hasArcCompletion: !!endResponse.arcCompletion,
+          });
           setSessionEnded(true);
           if (endResponse.suggestedReading) {
             setSuggestedReading(endResponse.suggestedReading);
@@ -46,13 +66,13 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
             setArcCompletion(endResponse.arcCompletion);
           }
         } catch (endError) {
-          console.error('Failed to auto-end session:', endError);
+          console.error('[ChatInterface] Auto-end session failed:', endError);
         } finally {
           setEnding(false);
         }
       }
     } catch (error) {
-      console.error('Failed to send message:', error);
+      console.error('[ChatInterface] Send message failed:', error);
       // Remove optimistic message on error
       setMessages((prev) => prev.slice(0, -1));
     } finally {
@@ -61,11 +81,19 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
   };
 
   const handleEndSession = async () => {
-    if (ending || sessionEnded) return;
+    if (ending || sessionEnded) {
+      console.log('[ChatInterface] handleEndSession blocked:', { ending, sessionEnded });
+      return;
+    }
 
+    console.log('[ChatInterface] Ending session manually...');
     setEnding(true);
     try {
       const response = await endSession();
+      console.log('[ChatInterface] End session success:', {
+        hasSuggestedReading: !!response.suggestedReading,
+        hasArcCompletion: !!response.arcCompletion,
+      });
       setSessionEnded(true);
       if (response.suggestedReading) {
         setSuggestedReading(response.suggestedReading);
@@ -74,7 +102,7 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
         setArcCompletion(response.arcCompletion);
       }
     } catch (error) {
-      console.error('Failed to end session:', error);
+      console.error('[ChatInterface] End session failed:', error);
     } finally {
       setEnding(false);
     }

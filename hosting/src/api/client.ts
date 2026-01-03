@@ -15,6 +15,9 @@ async function fetchAPI<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
+  const method = options.method || 'GET';
+  console.log(`[API] ${method} ${path}`, options.body ? JSON.parse(options.body as string) : '');
+
   const token = await getAuthToken();
 
   const response = await fetch(`${API_BASE}${path}`, {
@@ -28,10 +31,13 @@ async function fetchAPI<T>(
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Request failed' }));
+    console.error(`[API] ${method} ${path} failed:`, response.status, error);
     throw new Error(error.error || 'Request failed');
   }
 
-  return response.json();
+  const data = await response.json();
+  console.log(`[API] ${method} ${path} response:`, data);
+  return data;
 }
 
 // Types (matching backend)

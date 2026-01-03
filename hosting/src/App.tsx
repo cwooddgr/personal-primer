@@ -27,13 +27,16 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('[LoginForm] Attempting sign in:', email);
     setLoading(true);
     setError('');
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      console.log('[LoginForm] Sign in successful');
       onLogin();
-    } catch {
+    } catch (err) {
+      console.error('[LoginForm] Sign in failed:', err);
       setError('Invalid email or password');
     } finally {
       setLoading(false);
@@ -72,7 +75,9 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log('[App] Setting up auth state listener...');
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      console.log('[App] Auth state changed:', user ? { uid: user.uid, email: user.email } : 'signed out');
       setUser(user);
       setLoading(false);
     });

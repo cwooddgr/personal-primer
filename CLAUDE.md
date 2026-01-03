@@ -61,7 +61,7 @@ Each day delivers exactly four elements that cohere around the current arc theme
 - `userReactions` - User feedback on artifacts
 
 ### API Endpoints
-- `GET /api/today` - Returns today's bundle (generates if needed), includes arc info and day/phase
+- `GET /api/today` - Returns today's bundle (generates if needed), includes arc info and dayInArc (actual bundle count)
 - `POST /api/today/message` - Send conversation message (returns `sessionShouldEnd` flag for smart ending)
 - `POST /api/today/end-session` - End session, extract insights (returns `suggestedReading` and `arcCompletion` if final day)
 - `POST /api/today/react` - Record reaction to artifact
@@ -70,7 +70,7 @@ Each day delivers exactly four elements that cohere around the current arc theme
 
 ### Bundle Generation Flow
 1. Gather context (arc, recent exposures, insights, recent creators)
-2. Calculate day in arc (counts bundles generated for this arc, not calendar days) and phase (early/middle/late)
+2. Calculate day in arc (bundle count + 1, since generating a new bundle) and phase (early/middle/late)
 3. LLM selects artifacts with search queries
 4. On final day of arc, special framing instructions prompt closure
 5. Resolve and validate links with retry logic:

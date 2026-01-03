@@ -240,11 +240,16 @@ async function searchWikimediaCommons(query: string): Promise<{ sourceUrl: strin
 
     let response = await fetch(apiUrl.toString());
 
-    // Retry once on rate limit with delay
+    // Retry on rate limit with exponential backoff
     if (response.status === 429) {
-      console.log(`[Commons] Rate limited, waiting 1s and retrying...`);
-      await sleep(1000);
+      console.log(`[Commons] Rate limited, waiting 3s and retrying...`);
+      await sleep(3000);
       response = await fetch(apiUrl.toString());
+      if (response.status === 429) {
+        console.log(`[Commons] Still rate limited, waiting 5s...`);
+        await sleep(5000);
+        response = await fetch(apiUrl.toString());
+      }
     }
 
     if (!response.ok) {

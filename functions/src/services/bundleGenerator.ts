@@ -21,6 +21,16 @@ import { resolveAppleMusicLink, resolveImageLink } from './linkValidator';
 
 const MAX_MUSIC_RETRIES = 5;
 const MAX_IMAGE_RETRIES = 3;
+const MAX_TEXT_RETRIES = 3;
+
+// Normalize creator names for comparison (handles "T.S. Eliot" vs "T. S. Eliot")
+function normalizeCreatorName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\./g, '') // Remove periods
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .trim();
+}
 
 const BUNDLE_SELECTION_SYSTEM_PROMPT = `You are the curator for Personal Primer, a daily intellectual formation guide.
 
@@ -91,6 +101,47 @@ const ALTERNATIVE_IMAGE_SYSTEM_PROMPT = `You are the curator for Personal Primer
 - Is by a DIFFERENT artist than the failed selection
 
 Return ONLY a JSON object with the new image selection.`;
+
+const ALTERNATIVE_TEXT_SYSTEM_PROMPT = `You are the curator for Personal Primer. The previously selected text quote was by an author who has already appeared recently. We need variety of voices.
+
+Suggest an alternative text/quote that:
+- Fits the same thematic role in the arc
+- Is by a COMPLETELY DIFFERENT author than any listed in the rejected selections
+- Is a real, verbatim quote from an actual published source
+
+Return ONLY a JSON object with the new text selection.`;
+
+interface TextSelection {
+  content: string;
+  source: string;
+  author: string;
+}
+
+function buildAlternativeTextPrompt(
+  arc: Arc,
+  failedSelections: TextSelection[],
+  originalFramingText: string
+): string {
+  const failedList = failedSelections
+    .map(s => `- "${s.source}" by ${s.author}`)
+    .join('\n');
+
+  return `CURRENT ARC: ${arc.theme}
+${arc.description}
+
+FRAMING CONTEXT (for reference):
+${originalFramingText.slice(0, 500)}...
+
+TEXT SELECTIONS REJECTED (authors appeared too recently):
+${failedList}
+
+Suggest an alternative text/quote that fits the theme but is by a DIFFERENT AUTHOR. Return as JSON:
+{
+  "content": "the quote or excerpt (keep it under 200 words)",
+  "source": "book, poem, or work title",
+  "author": "author name"
+}`;
+}
 
 interface ImageSelection {
   title: string;
@@ -308,6 +359,39 @@ export async function generateDailyBundle(bundleId: string): Promise<DailyBundle
     console.warn(`Failed to find image link after ${MAX_IMAGE_RETRIES} retries. Using last selection without link.`);
   }
 
+  // Text author validation - ensure we don't repeat authors from recent bundles
+  // Build set of normalized recent text authors
+  const recentTextAuthors = new Set<string>();
+  for (const e of exposures) {
+    if (e.artifactType === 'text' && e.creator) {
+      recentTextAuthors.add(normalizeCreatorName(e.creator));
+    }
+  }
+
+  let textSelection = selection.text;
+  const failedTextSelections: TextSelection[] = [];
+
+  // Check if selected author is in recent authors
+  while (
+    recentTextAuthors.has(normalizeCreatorName(textSelection.author)) &&
+    failedTextSelections.length < MAX_TEXT_RETRIES
+  ) {
+    console.log(`Text author "${textSelection.author}" appeared recently. Requesting alternative...`);
+    failedTextSelections.push(textSelection);
+
+    const alternative = await generateJSON<TextSelection>(
+      ALTERNATIVE_TEXT_SYSTEM_PROMPT,
+      buildAlternativeTextPrompt(arc, failedTextSelections, selection.framingText)
+    );
+
+    console.log(`Trying alternative text by: ${alternative.author}`);
+    textSelection = alternative;
+  }
+
+  if (recentTextAuthors.has(normalizeCreatorName(textSelection.author))) {
+    console.warn(`Failed to find non-repeated text author after ${MAX_TEXT_RETRIES} retries. Using last selection.`);
+  }
+
   // Step 4: Build and persist bundle
   const now = toTimestamp(new Date());
 
@@ -327,9 +411,9 @@ export async function generateDailyBundle(bundleId: string): Promise<DailyBundle
       imageUrl: imageLink?.imageUrl || '',
     },
     text: {
-      content: selection.text.content,
-      source: selection.text.source,
-      author: selection.text.author,
+      content: textSelection.content,
+      source: textSelection.source,
+      author: textSelection.author,
     },
     framingText: selection.framingText,
   };
@@ -358,8 +442,8 @@ export async function generateDailyBundle(bundleId: string): Promise<DailyBundle
     createExposure({
       ...exposureBase,
       artifactType: 'text',
-      artifactIdentifier: `${selection.text.source} - ${selection.text.author}`,
-      creator: selection.text.author,
+      artifactIdentifier: `${textSelection.source} - ${textSelection.author}`,
+      creator: textSelection.author,
     }),
   ]);
 

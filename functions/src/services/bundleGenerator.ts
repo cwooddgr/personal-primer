@@ -277,7 +277,7 @@ export async function generateDailyBundle(bundleId: string): Promise<DailyBundle
     throw new Error('No active arc found. Please create an arc first.');
   }
 
-  const dayInArc = calculateDayInArc(arc);
+  const dayInArc = await calculateDayInArc(arc);
   const currentPhase = determinePhase(dayInArc, arc.targetDurationDays);
 
   // Update phase if changed

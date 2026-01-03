@@ -10,7 +10,7 @@ export async function handleGetArc(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const dayInArc = calculateDayInArc(arc);
+    const dayInArc = await calculateDayInArc(arc);
 
     res.json({
       arc,

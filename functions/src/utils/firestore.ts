@@ -206,13 +206,15 @@ export async function createReaction(reaction: Omit<UserReaction, 'id'>): Promis
   await collections.userReactions.add(reaction);
 }
 
-// Arc phase calculation
-export function calculateDayInArc(arc: Arc): number {
-  const now = new Date();
-  const start = arc.startDate.toDate();
-  const diffTime = now.getTime() - start.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return Math.max(1, diffDays);
+// Arc phase calculation - counts bundles generated for this arc, not calendar days
+export async function calculateDayInArc(arc: Arc): Promise<number> {
+  const snapshot = await collections.dailyBundles
+    .where('arcId', '==', arc.id)
+    .count()
+    .get();
+
+  // Day in arc is bundle count + 1 (we're generating the next bundle)
+  return snapshot.data().count + 1;
 }
 
 export function determinePhase(dayInArc: number, targetDuration: number): Arc['currentPhase'] {

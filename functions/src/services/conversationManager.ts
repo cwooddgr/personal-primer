@@ -143,7 +143,7 @@ export async function handleMessage(
 ): Promise<{ response: string; conversation: Conversation; sessionShouldEnd: boolean }> {
   const bundleId = bundle.id;
   const now = toTimestamp(new Date());
-  const dayInArc = calculateDayInArc(arc);
+  const dayInArc = await calculateDayInArc(arc);
   const insights = await getRecentInsights(14);
 
   // Get or create conversation

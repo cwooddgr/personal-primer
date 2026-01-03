@@ -168,7 +168,7 @@ export async function extractAndEndSession(bundleId: string, bundle: DailyBundle
   // Check if this is the last day of the arc
   const arc = await getActiveArc();
   if (arc) {
-    const dayInArc = calculateDayInArc(arc);
+    const dayInArc = await calculateDayInArc(arc);
     if (dayInArc >= arc.targetDurationDays) {
       console.log(`Arc "${arc.theme}" completed on day ${dayInArc}. Generating summary and next arc...`);
 

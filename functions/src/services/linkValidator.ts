@@ -161,19 +161,21 @@ export interface ResolvedImage {
 
 async function validateImageUrl(url: string): Promise<boolean> {
   try {
+    console.log(`[Validate] Checking URL: ${url}`);
     const response = await fetch(url, { method: 'HEAD' });
     if (!response.ok) {
-      console.log(`Image URL validation failed (${response.status}): ${url}`);
+      console.log(`[Validate] Failed (${response.status}): ${url}`);
       return false;
     }
     const contentType = response.headers.get('content-type');
     if (!contentType?.startsWith('image/')) {
-      console.log(`Image URL has wrong content-type (${contentType}): ${url}`);
+      console.log(`[Validate] Wrong content-type (${contentType}): ${url}`);
       return false;
     }
+    console.log(`[Validate] OK (${contentType}): ${url}`);
     return true;
   } catch (error) {
-    console.error(`Image URL validation error for ${url}:`, error);
+    console.error(`[Validate] Error for ${url}:`, error);
     return false;
   }
 }
@@ -220,6 +222,7 @@ async function getWikimediaImageUrl(pageTitle: string): Promise<string | null> {
 // Search Wikimedia Commons directly for artwork
 async function searchWikimediaCommons(query: string): Promise<{ sourceUrl: string; imageUrl: string } | null> {
   try {
+    console.log(`[Commons] Searching for: "${query}"`);
     const apiUrl = new URL('https://commons.wikimedia.org/w/api.php');
     apiUrl.searchParams.set('action', 'query');
     apiUrl.searchParams.set('generator', 'search');
@@ -233,31 +236,43 @@ async function searchWikimediaCommons(query: string): Promise<{ sourceUrl: strin
     apiUrl.searchParams.set('origin', '*');
 
     const response = await fetch(apiUrl.toString());
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.log(`[Commons] API error: ${response.status}`);
+      return null;
+    }
 
     const data = await response.json();
     const pages = data.query?.pages;
-    if (!pages) return null;
+    if (!pages) {
+      console.log(`[Commons] No pages found for: "${query}"`);
+      return null;
+    }
+
+    console.log(`[Commons] Found ${Object.keys(pages).length} results`);
 
     // Find the first image result with a valid URL
     for (const pageId of Object.keys(pages)) {
       const page = pages[pageId];
       const imageInfo = page?.imageinfo?.[0];
       if (imageInfo?.thumburl) {
-        console.log(`Found Wikimedia Commons image: ${imageInfo.thumburl}`);
+        console.log(`[Commons] Checking image: ${imageInfo.thumburl}`);
         const isValid = await validateImageUrl(imageInfo.thumburl);
         if (isValid) {
+          console.log(`[Commons] Valid image found: ${imageInfo.thumburl}`);
           return {
             sourceUrl: imageInfo.descriptionurl || `https://commons.wikimedia.org/wiki/File:${page.title?.replace('File:', '')}`,
             imageUrl: imageInfo.thumburl,
           };
         }
-        console.log(`Wikimedia image URL failed validation, trying next result...`);
+        console.log(`[Commons] Image failed validation, trying next...`);
+      } else {
+        console.log(`[Commons] No thumburl for page: ${page.title}`);
       }
     }
+    console.log(`[Commons] No valid images found for: "${query}"`);
     return null;
   } catch (error) {
-    console.error('Error searching Wikimedia Commons:', error);
+    console.error('[Commons] Error:', error);
     return null;
   }
 }
@@ -268,15 +283,19 @@ export async function resolveImageLink(
   searchQuery: string
 ): Promise<ResolvedImage | null> {
   try {
+    console.log(`Resolving image for: "${title}" by ${artist}`);
+
     // First, try Wikimedia Commons directly (best for artwork)
     const commonsResult = await searchWikimediaCommons(`${title} ${artist}`);
     if (commonsResult) {
+      console.log(`Image resolved via Commons (title+artist): ${commonsResult.imageUrl}`);
       return commonsResult;
     }
 
     // Try with just the title
     const commonsTitleResult = await searchWikimediaCommons(title);
     if (commonsTitleResult) {
+      console.log(`Image resolved via Commons (title only): ${commonsTitleResult.imageUrl}`);
       return commonsTitleResult;
     }
 

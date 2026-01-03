@@ -19,7 +19,7 @@ import {
 import { generateJSON } from './anthropic';
 import { resolveAppleMusicLink, resolveImageLink } from './linkValidator';
 
-const MAX_MUSIC_RETRIES = 3;
+const MAX_MUSIC_RETRIES = 5;
 const MAX_IMAGE_RETRIES = 3;
 
 const BUNDLE_SELECTION_SYSTEM_PROMPT = `You are the curator for Personal Primer, a daily intellectual formation guide.
@@ -43,8 +43,13 @@ You are a curator and narrator, not a teacher. Point, don't explain. Evoke, don'
 
 const ALTERNATIVE_MUSIC_SYSTEM_PROMPT = `You are the curator for Personal Primer. A previously selected music piece could not be found on Apple Music. Suggest an alternative that:
 - Fits the same thematic role in the arc
-- Is likely to be available on Apple Music (prefer well-known recordings)
-- Is by a DIFFERENT artist than the failed selection
+- Is by a DIFFERENT artist than the failed selection(s)
+- Is HIGHLY likely to be on Apple Music. To maximize findability:
+  - Prefer POPULAR, FAMOUS works over obscure ones
+  - For classical: choose iconic pieces (Beethoven's 5th, Debussy's Clair de Lune, Bach's Cello Suites)
+  - For classical: prefer solo or small ensemble works over full symphonies
+  - Avoid obscure movements or rarely-recorded pieces
+  - Use the composer/artist's most commonly known name spelling
 
 Return ONLY a JSON object with the new music selection.`;
 

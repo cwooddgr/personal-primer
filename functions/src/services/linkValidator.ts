@@ -70,18 +70,27 @@ export async function resolveAppleMusicLink(
   searchQuery: string
 ): Promise<ResolvedMusic | null> {
   try {
-    // Use iTunes Search API directly - more reliable than Google Custom Search
+    // Extract key words from title for fuzzy matching (e.g., "Symphony No. 5" -> ["symphony", "5"])
+    const titleKeywords = normalizeString(title).split(' ').filter(w => w.length > 1);
+
+    // Use iTunes Search API with multiple query strategies
     const searches = [
       `${title} ${artist}`,
       searchQuery,
       `${artist} ${title}`,
-    ];
+      artist, // Artist-only search - good for classical music with complex titles
+      title,  // Title-only search
+      // Simplified searches for classical music
+      `${artist} ${titleKeywords.slice(0, 3).join(' ')}`,
+    ].filter((q, i, arr) => arr.indexOf(q) === i); // Remove duplicates
+
+    let bestArtistMatch: iTunesSearchResult | null = null;
 
     for (const query of searches) {
       const url = new URL('https://itunes.apple.com/search');
       url.searchParams.set('term', query);
       url.searchParams.set('entity', 'song');
-      url.searchParams.set('limit', '10');
+      url.searchParams.set('limit', '25'); // Increased from 10 for better chances
 
       console.log(`iTunes Search: "${query}"`);
       const response = await fetch(url.toString());
@@ -106,14 +115,35 @@ export async function resolveAppleMusicLink(
         }
       }
 
-      // If no exact match, check if any result has matching artist and similar title
+      // Check for partial matches (artist + title keywords)
       for (const result of data.results) {
         const artistMatches = stringsMatch(result.artistName, artist);
         if (artistMatches) {
-          console.log(`Partial match (artist only): "${result.trackName}" by ${result.artistName}`);
-          // Log but continue searching - we want a better match
+          // Check if track name contains key words from the title
+          const trackNorm = normalizeString(result.trackName);
+          const keywordMatches = titleKeywords.filter(kw => trackNorm.includes(kw));
+
+          if (keywordMatches.length >= Math.min(2, titleKeywords.length)) {
+            console.log(`Keyword match (${keywordMatches.length}/${titleKeywords.length} keywords): "${result.trackName}" by ${result.artistName}`);
+            console.log(`URL: ${result.trackViewUrl}`);
+            return { appleMusicUrl: result.trackViewUrl };
+          }
+
+          // Store first artist match as fallback
+          if (!bestArtistMatch) {
+            bestArtistMatch = result;
+            console.log(`Stored artist-only fallback: "${result.trackName}" by ${result.artistName}`);
+          }
         }
       }
+    }
+
+    // Fallback: Accept artist-only match if we found one
+    // Better to have a link to a different piece by the same composer than no link at all
+    if (bestArtistMatch) {
+      console.log(`Using artist-only fallback: "${bestArtistMatch.trackName}" by ${bestArtistMatch.artistName}`);
+      console.log(`URL: ${bestArtistMatch.trackViewUrl}`);
+      return { appleMusicUrl: bestArtistMatch.trackViewUrl };
     }
 
     console.log(`Could not verify Apple Music link for: "${title}" by ${artist}`);

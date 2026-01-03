@@ -127,3 +127,7 @@ When the final day of an arc ends:
 4. Set up Google Custom Search Engine at programmablesearch.google.com
 5. Run `firebase functions:secrets:set` for all three secrets
 6. Create first arc in Firestore (see `scripts/seed-arc.ts`)
+
+## Debugging Scripts
+
+- `./scripts/delete-today-data.sh` - Deletes today's bundle, conversation, and session insights so it can be regenerated. Exposures must still be deleted manually in Firebase Console (they have auto-generated IDs). Run this when debugging bundle generation issues.

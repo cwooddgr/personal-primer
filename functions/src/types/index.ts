@@ -130,6 +130,7 @@ export interface TodayResponse {
   bundle: DailyBundle;
   conversation: Conversation | null;
   arc: Arc;
+  dayInArc: number;
 }
 
 export interface MessageRequest {

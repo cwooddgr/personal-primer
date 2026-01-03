@@ -44,16 +44,10 @@ function ArcView() {
     <div className="arc-view">
       <header className="arc-header">
         <h1>{arc.theme}</h1>
-        <p className="arc-phase">{arc.currentPhase} phase</p>
+        <p className="arc-phase">Day {dayInArc} of {arc.targetDurationDays}</p>
       </header>
 
       {arc.description && <p className="arc-description">{arc.description}</p>}
-
-      <div className="arc-progress">
-        <p className="day-count">
-          Day {dayInArc} of ~{arc.targetDurationDays}
-        </p>
-      </div>
     </div>
   );
 }

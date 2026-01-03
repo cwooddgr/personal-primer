@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { TodayResponse } from '../types';
-import { getBundle, getConversation, getActiveArc, validateDateId } from '../utils/firestore';
+import { getBundle, getConversation, getActiveArc, validateDateId, calculateDayInArc } from '../utils/firestore';
 import { generateDailyBundle } from '../services/bundleGenerator';
 
 function getErrorMessage(error: unknown): string {
@@ -51,10 +51,13 @@ export async function handleGetToday(req: Request, res: Response): Promise<void>
       return;
     }
 
+    const dayInArc = await calculateDayInArc(arc);
+
     const response: TodayResponse = {
       bundle,
       conversation,
       arc,
+      dayInArc,
     };
 
     res.json(response);

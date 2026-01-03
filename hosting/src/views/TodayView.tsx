@@ -47,14 +47,14 @@ function TodayView() {
     return <div className="error-message">No data available</div>;
   }
 
-  const { bundle, conversation, arc } = data;
+  const { bundle, conversation, arc, dayInArc } = data;
 
   return (
     <div className="today-view">
       <header className="today-header">
         <h1>Today</h1>
         <p className="arc-badge">
-          {arc.theme} &middot; {arc.currentPhase}
+          {arc.theme} &middot; Day {dayInArc} of {arc.targetDurationDays}
         </p>
         {arc.description && <p className="arc-description">{arc.description}</p>}
       </header>

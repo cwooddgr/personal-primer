@@ -3,6 +3,9 @@ import { defineSecret } from 'firebase-functions/params';
 const googleSearchApiKey = defineSecret('GOOGLE_SEARCH_API_KEY');
 const googleSearchCx = defineSecret('GOOGLE_SEARCH_CX');
 
+// Helper to avoid rate limiting
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 interface SearchResult {
   title: string;
   link: string;
@@ -235,7 +238,15 @@ async function searchWikimediaCommons(query: string): Promise<{ sourceUrl: strin
     apiUrl.searchParams.set('format', 'json');
     apiUrl.searchParams.set('origin', '*');
 
-    const response = await fetch(apiUrl.toString());
+    let response = await fetch(apiUrl.toString());
+
+    // Retry once on rate limit with delay
+    if (response.status === 429) {
+      console.log(`[Commons] Rate limited, waiting 1s and retrying...`);
+      await sleep(1000);
+      response = await fetch(apiUrl.toString());
+    }
+
     if (!response.ok) {
       console.log(`[Commons] API error: ${response.status}`);
       return null;
@@ -292,12 +303,18 @@ export async function resolveImageLink(
       return commonsResult;
     }
 
+    // Add delay to avoid rate limiting
+    await sleep(500);
+
     // Try with just the title
     const commonsTitleResult = await searchWikimediaCommons(title);
     if (commonsTitleResult) {
       console.log(`Image resolved via Commons (title only): ${commonsTitleResult.imageUrl}`);
       return commonsTitleResult;
     }
+
+    // Add delay before Google fallback
+    await sleep(500);
 
     // Fallback: Use Google to find Wikipedia page, then extract image
     const query = `${title} ${artist} wikipedia`;

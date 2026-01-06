@@ -76,10 +76,18 @@ Each day delivers exactly four elements that cohere around the current arc theme
 3. LLM selects artifacts with search queries
 4. On final day of arc, special framing instructions prompt closure
 5. Resolve and validate links with retry logic:
-   - **Music:** Up to 5 retries with iTunes API, uses multiple search strategies (title+artist, artist-only, keyword matching), falls back to any track by same artist if exact match not found
+   - **Music:** Up to 5 retries with iTunes API, classical-aware search (see below)
    - **Image:** Up to 3 retries with Wikimedia Commons API
    - **Text:** Programmatic validation against recent authors (normalized name comparison), up to 3 retries if author appeared in last 14 days
 6. Persist bundle and exposure records (including creator info)
+
+### Classical Music Search
+For classical music, the LLM provides additional fields: `composer`, `performer`, `isClassical`. The search strategy differs:
+- Search prioritizes `{composer} {title}` (e.g., "Arvo Pärt Fratres")
+- Accepts matches where iTunes artist is either the composer OR the performer
+- Title must match - will NOT return unrelated works by the same performer
+- No artist-only fallback (removed to prevent returning wrong pieces like "Here Comes the Sun" when searching for "Fratres")
+- For exposures, stores the composer (not performer) as `creator` to avoid same-composer repeats
 
 ### Conversation Context
 System prompts include: today's artifacts, current arc info, user insights from past sessions. Guide tone is curious companion, not instructor.
@@ -119,7 +127,8 @@ The history page (`/history`) displays past bundles organized by arc:
 
 - No artifact may repeat within 14-day window (check exposures)
 - No text author may repeat within 14-day window (programmatically enforced with normalized name comparison, e.g., "T.S. Eliot" = "T. S. Eliot")
-- Music/image creators are soft-avoided via LLM instructions (not programmatically enforced)
+- For classical music, composer is stored as `creator` in exposures (not performer) to avoid same-composer repeats
+- Music/image creators are soft-avoided via LLM instructions for non-classical music
 - All links must be validated before delivery (HEAD request, 200 status)
 - Only one arc active at a time
 - Arc duration is bundle-count based (skipped days don't advance the arc)

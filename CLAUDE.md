@@ -53,7 +53,7 @@ Each day delivers exactly four elements that cohere around the current arc theme
 4. **Framing** - 2-3 paragraph introduction connecting to recent days
 
 ### Core Data Collections (Firestore)
-- `arcs` - Thematic journeys (~7 bundles each with early/middle/late phases, includes `completedDate` when finished)
+- `arcs` - Thematic journeys (~7 bundles each with early/middle/late phases, includes `completedDate` when finished, `shortDescription` for UI display)
 - `dailyBundles` - Daily content (keyed by YYYY-MM-DD, includes optional `suggestedReading`)
 - `exposures` - Tracks shown artifacts to prevent repetition (includes `creator` to avoid same-creator bundles)
 - `conversations` - Chat history for each day's bundle (includes `sessionEnded` flag)
@@ -122,7 +122,7 @@ The system detects natural conversation endings via:
 ### Arc Completion & Transition
 When the final day of an arc ends:
 1. LLM generates 2-3 paragraph retrospective summary of the arc journey
-2. New arc theme and description generated based on user's revealed interests (uses final conversation for context)
+2. New arc theme, description, and shortDescription generated based on user's revealed interests (uses final conversation for context)
 3. New arc automatically created and becomes active
 4. Frontend displays arc completion summary and "coming tomorrow" preview
 
@@ -131,7 +131,7 @@ User can change the suggested next arc theme before it begins:
 1. Click "Change" link next to the "Coming tomorrow" preview
 2. Conversation continues in the same chat interface
 3. User and assistant discuss alternative themes
-4. When agreed, assistant includes `{{NEW_ARC:theme|description}}` marker
+4. When agreed, assistant includes `{{NEW_ARC:theme|description|shortDescription}}` marker
 5. Pending arc is updated in Firestore and preview refreshes
 6. User can cancel anytime to keep original theme
 
@@ -163,7 +163,7 @@ The history page (`/history`) displays past bundles organized by arc:
 - `functions/src/api/refineArc.ts` - Handles arc refinement conversation and theme updates
 - `functions/src/services/linkValidator.ts` - iTunes API for music, Wikimedia API for images, Google Custom Search for readings
 - `functions/src/scheduled/inactivityCheck.ts` - Scheduled function to end stale sessions (every 15 min)
-- `hosting/src/views/TodayView.tsx` - Main daily view (shows arc description in header)
+- `hosting/src/views/TodayView.tsx` - Main daily view (shows arc shortDescription in header)
 - `hosting/src/views/HistoryView.tsx` - History page with bundles organized by arc
 - `hosting/src/views/ConversationHistoryView.tsx` - Read-only view of past conversations with full bundle context
 - `hosting/src/components/ChatInterface.tsx` - Conversation UI (handles suggested reading, arc completion, and arc refinement)

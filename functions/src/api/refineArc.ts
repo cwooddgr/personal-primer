@@ -7,7 +7,7 @@ interface RefineArcRequest {
   conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
 }
 
-const NEW_ARC_MARKER_REGEX = /\{\{NEW_ARC:([^|]+)\|([^}]+)\}\}/;
+const NEW_ARC_MARKER_REGEX = /\{\{NEW_ARC:([^|]+)\|([^|]+)\|([^}]+)\}\}/;
 
 const REFINE_ARC_SYSTEM_PROMPT = `You are helping a user choose a theme for their next Personal Primer arc.
 
@@ -23,13 +23,14 @@ YOUR ROLE:
 
 WHEN YOU AND THE USER AGREE ON A THEME:
 When you've settled on a theme together, you MUST confirm it by including this marker at the END of your response:
-{{NEW_ARC:theme|description}}
+{{NEW_ARC:theme|description|shortDescription}}
 
 Where:
 - "theme" is a single word or short phrase (e.g., "Creation", "Stillness", "Boundaries")
 - "description" is 2-3 sentences setting the tone and scope
+- "shortDescription" is ONE sentence capturing the essence (for UI display)
 
-Example: {{NEW_ARC:Creation|Exploring the spark of making—what drives us to bring new things into being, from art to ideas to life itself. We'll encounter creators, creation myths, and the quiet courage required to begin.}}
+Example: {{NEW_ARC:Creation|Exploring the spark of making—what drives us to bring new things into being, from art to ideas to life itself. We'll encounter creators, creation myths, and the quiet courage required to begin.|What compels us to bring something new into being?}}
 
 IMPORTANT: Only include this marker when both you and the user have clearly agreed on a theme. If the user is still exploring or unsure, continue the conversation without the marker.`;
 
@@ -86,19 +87,21 @@ export async function handleRefineArcMessage(req: Request, res: Response): Promi
 
     // Check for the NEW_ARC marker
     const markerMatch = assistantResponse.match(NEW_ARC_MARKER_REGEX);
-    let arcUpdated: { theme: string; description: string } | undefined;
+    let arcUpdated: { theme: string; description: string; shortDescription: string } | undefined;
 
     if (markerMatch) {
       const newTheme = markerMatch[1].trim();
       const newDescription = markerMatch[2].trim();
+      const newShortDescription = markerMatch[3].trim();
 
       // Update the pending arc
       await updateArc(pendingArc.id, {
         theme: newTheme,
         description: newDescription,
+        shortDescription: newShortDescription,
       });
 
-      arcUpdated = { theme: newTheme, description: newDescription };
+      arcUpdated = { theme: newTheme, description: newDescription, shortDescription: newShortDescription };
       console.log(`Updated pending arc to: "${newTheme}"`);
 
       // Strip the marker from the response

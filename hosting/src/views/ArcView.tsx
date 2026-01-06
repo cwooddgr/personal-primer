@@ -47,7 +47,9 @@ function ArcView() {
         <p className="arc-phase">Day {dayInArc} of {arc.targetDurationDays}</p>
       </header>
 
-      {arc.description && <p className="arc-description">{arc.description}</p>}
+      {(arc.shortDescription || arc.description) && (
+        <p className="arc-description">{arc.shortDescription || arc.description}</p>
+      )}
     </div>
   );
 }

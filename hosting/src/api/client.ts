@@ -45,6 +45,7 @@ export interface Arc {
   id: string;
   theme: string;
   description: string;
+  shortDescription?: string; // One-sentence summary for UI display (optional for backwards compat)
   currentPhase: 'early' | 'middle' | 'late';
   targetDurationDays: number;
 }
@@ -60,6 +61,7 @@ export interface ArcCompletionData {
   nextArc: {
     theme: string;
     description: string;
+    shortDescription: string;
   };
 }
 
@@ -170,6 +172,7 @@ export interface ArcSummary {
   id: string;
   theme: string;
   description: string;
+  shortDescription?: string;
 }
 
 export interface ArcWithBundles {
@@ -200,6 +203,7 @@ export interface ConversationHistoryResponse {
     id: string;
     theme: string;
     description: string;
+    shortDescription?: string;
     targetDurationDays: number;
   } | null;
   dayInArc: number;
@@ -221,6 +225,7 @@ export interface ArcRefinementResponse {
   arcUpdated?: {
     theme: string;
     description: string;
+    shortDescription: string;
   };
 }
 

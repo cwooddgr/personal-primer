@@ -46,8 +46,8 @@ function HistoryView() {
       {arcGroups.map((group) => (
         <section key={group.arc.id} className="history-arc-group">
           <h2 className="history-arc-theme">{group.arc.theme}</h2>
-          {group.arc.description && (
-            <p className="history-arc-description">{group.arc.description}</p>
+          {(group.arc.shortDescription || group.arc.description) && (
+            <p className="history-arc-description">{group.arc.shortDescription || group.arc.description}</p>
           )}
 
           <ul className="history-list">

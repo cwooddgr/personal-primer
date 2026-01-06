@@ -14,6 +14,7 @@ interface LLMArcSummary {
 interface LLMNextArc {
   theme: string;
   description: string;
+  shortDescription: string;
 }
 
 const ARC_SUMMARY_SYSTEM_PROMPT = `You are reflecting on a completed thematic arc from Personal Primer, a daily intellectual formation guide.
@@ -38,7 +39,10 @@ Based on the just-completed arc, the user's revealed interests, and especially t
 
 IMPORTANT: If the user explicitly discussed or agreed on a theme for the next arc in the final conversation, you should honor that request. The user's explicit preferences take priority over inferred interests.
 
-The theme should be a single word or short phrase, with a 2-3 sentence description that sets the tone without over-explaining.`;
+Provide:
+- A theme (single word or short phrase)
+- A description (2-3 sentences setting the tone and scope)
+- A shortDescription (ONE sentence capturing the essence, for display in the UI)`;
 
 function buildSummaryPrompt(arc: Arc, bundles: DailyBundle[], insights: SessionInsights[]): string {
   const artifactList = bundles
@@ -104,7 +108,8 @@ ${conversationText}
 Suggest the next arc theme. If the user expressed a preference for a specific theme in the conversation above, honor that request. Return as JSON:
 {
   "theme": "single word or short phrase",
-  "description": "2-3 sentences setting the tone and scope"
+  "description": "2-3 sentences setting the tone and scope",
+  "shortDescription": "ONE sentence capturing the essence"
 }`;
 }
 
@@ -133,6 +138,7 @@ export async function generateArcCompletion(arc: Arc, finalConversation: Convers
   await createArc({
     theme: nextArcResult.theme,
     description: nextArcResult.description,
+    shortDescription: nextArcResult.shortDescription,
     startDate: toTimestamp(tomorrow),
     targetDurationDays: 7,
     currentPhase: 'early',
@@ -145,6 +151,7 @@ export async function generateArcCompletion(arc: Arc, finalConversation: Convers
     nextArc: {
       theme: nextArcResult.theme,
       description: nextArcResult.description,
+      shortDescription: nextArcResult.shortDescription,
     },
   };
 }

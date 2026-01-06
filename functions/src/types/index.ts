@@ -4,6 +4,7 @@ export interface Arc {
   id: string;
   theme: string;
   description: string;
+  shortDescription: string; // One-sentence summary for UI display
   startDate: Timestamp;
   targetDurationDays: number;
   currentPhase: 'early' | 'middle' | 'late';
@@ -15,6 +16,7 @@ export interface ArcCompletionData {
   nextArc: {
     theme: string;
     description: string;
+    shortDescription: string;
   };
 }
 

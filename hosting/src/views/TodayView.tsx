@@ -56,7 +56,9 @@ function TodayView() {
         <p className="arc-badge">
           {arc.theme} &middot; Day {dayInArc} of {arc.targetDurationDays}
         </p>
-        {arc.description && <p className="arc-description">{arc.description}</p>}
+        {(arc.shortDescription || arc.description) && (
+          <p className="arc-description">{arc.shortDescription || arc.description}</p>
+        )}
       </header>
 
       <section className="artifacts">

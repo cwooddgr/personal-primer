@@ -17,7 +17,7 @@ import {
   toTimestamp,
 } from '../utils/firestore';
 import { generateJSON } from './anthropic';
-import { resolveAppleMusicLink, resolveImageLink } from './linkValidator';
+import { resolveAppleMusicLink, resolveImageLink, MusicSearchOptions } from './linkValidator';
 
 const MAX_MUSIC_RETRIES = 5;
 const MAX_IMAGE_RETRIES = 3;
@@ -61,11 +61,16 @@ const ALTERNATIVE_MUSIC_SYSTEM_PROMPT = `You are the curator for Personal Primer
   - Avoid obscure movements or rarely-recorded pieces
   - Use the composer/artist's most commonly known name spelling
 
+IMPORTANT for classical music: Always provide BOTH composer AND performer when known. The composer is essential for searching.
+
 Return ONLY a JSON object with the new music selection.`;
 
 interface MusicSelection {
   title: string;
   artist: string;
+  composer?: string;
+  performer?: string;
+  isClassical?: boolean;
   searchQuery: string;
 }
 
@@ -90,7 +95,10 @@ ${failedList}
 Suggest an alternative music piece that fits the theme. Return as JSON:
 {
   "title": "exact title of the piece",
-  "artist": "composer or performer",
+  "artist": "primary artist (composer for classical, performer/band for popular music)",
+  "composer": "for classical music only: the composer's name",
+  "performer": "for classical music only: the performer's name (optional)",
+  "isClassical": true or false,
   "searchQuery": "search query to find this on Apple Music"
 }`;
 }
@@ -251,7 +259,10 @@ Select today's artifacts and write the framing text. Return as JSON:
 {
   "music": {
     "title": "exact title of the piece",
-    "artist": "composer or performer",
+    "artist": "primary artist (composer for classical, performer/band for popular music)",
+    "composer": "for classical music only: the composer's name (e.g., 'Arvo Pärt')",
+    "performer": "for classical music only: the performer's name (e.g., 'Yo-Yo Ma') - optional",
+    "isClassical": true or false,
     "searchQuery": "search query to find this on Apple Music"
   },
   "image": {
@@ -298,10 +309,16 @@ export async function generateDailyBundle(bundleId: string): Promise<DailyBundle
 
   // Step 3: Link resolution with retry for music
   let musicSelection = selection.music;
+  const musicOptions: MusicSearchOptions = {
+    composer: musicSelection.composer,
+    performer: musicSelection.performer,
+    isClassical: musicSelection.isClassical,
+  };
   let musicLink = await resolveAppleMusicLink(
     musicSelection.title,
     musicSelection.artist,
-    musicSelection.searchQuery
+    musicSelection.searchQuery,
+    musicOptions
   );
 
   // Retry with alternative music if link not found
@@ -317,10 +334,16 @@ export async function generateDailyBundle(bundleId: string): Promise<DailyBundle
 
     console.log(`Trying alternative: "${alternative.title}" by ${alternative.artist}`);
     musicSelection = alternative;
+    const altMusicOptions: MusicSearchOptions = {
+      composer: alternative.composer,
+      performer: alternative.performer,
+      isClassical: alternative.isClassical,
+    };
     musicLink = await resolveAppleMusicLink(
       alternative.title,
       alternative.artist,
-      alternative.searchQuery
+      alternative.searchQuery,
+      altMusicOptions
     );
   }
 
@@ -403,6 +426,8 @@ export async function generateDailyBundle(bundleId: string): Promise<DailyBundle
     music: {
       title: musicSelection.title,
       artist: musicSelection.artist,
+      ...(musicSelection.composer && { composer: musicSelection.composer }),
+      ...(musicSelection.performer && { performer: musicSelection.performer }),
       appleMusicUrl: musicLink?.appleMusicUrl || '',
     },
     image: {
@@ -427,12 +452,15 @@ export async function generateDailyBundle(bundleId: string): Promise<DailyBundle
     arcId: arc.id,
   };
 
+  // For music, use composer as creator if available (for classical music)
+  const musicCreator = musicSelection.composer || musicSelection.artist;
+
   await Promise.all([
     createExposure({
       ...exposureBase,
       artifactType: 'music',
       artifactIdentifier: `${musicSelection.title} - ${musicSelection.artist}`,
-      creator: musicSelection.artist,
+      creator: musicCreator,
     }),
     createExposure({
       ...exposureBase,

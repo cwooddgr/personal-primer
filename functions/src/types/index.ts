@@ -31,6 +31,8 @@ export interface DailyBundle {
   music: {
     title: string;
     artist: string;
+    composer?: string;   // For classical: the composer (e.g., "Arvo Pärt")
+    performer?: string;  // For classical: the performer (e.g., "Yo-Yo Ma")
     appleMusicUrl: string;
   };
   image: {
@@ -97,6 +99,9 @@ export interface LLMBundleSelection {
   music: {
     title: string;
     artist: string;
+    composer?: string;     // For classical: the composer (e.g., "Arvo Pärt")
+    performer?: string;    // For classical: the performer (e.g., "Yo-Yo Ma")
+    isClassical?: boolean; // Hint for search strategy
     searchQuery: string;
   };
   image: {

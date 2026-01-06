@@ -67,92 +67,131 @@ function stringsMatch(a: string, b: string): boolean {
   return normA.includes(normB) || normB.includes(normA);
 }
 
+export interface MusicSearchOptions {
+  composer?: string;
+  performer?: string;
+  isClassical?: boolean;
+}
+
 export async function resolveAppleMusicLink(
   title: string,
   artist: string,
-  searchQuery: string
+  searchQuery: string,
+  options?: MusicSearchOptions
 ): Promise<ResolvedMusic | null> {
   try {
+    const { composer, performer, isClassical } = options || {};
+
     // Extract key words from title for fuzzy matching (e.g., "Symphony No. 5" -> ["symphony", "5"])
     const titleKeywords = normalizeString(title).split(' ').filter(w => w.length > 1);
 
-    // Use iTunes Search API with multiple query strategies
-    const searches = [
-      `${title} ${artist}`,
-      searchQuery,
-      `${artist} ${title}`,
-      artist, // Artist-only search - good for classical music with complex titles
-      title,  // Title-only search
-      // Simplified searches for classical music
-      `${artist} ${titleKeywords.slice(0, 3).join(' ')}`,
-    ].filter((q, i, arr) => arr.indexOf(q) === i); // Remove duplicates
+    // Build search queries based on whether this is classical music
+    let searches: string[];
 
-    let bestArtistMatch: iTunesSearchResult | null = null;
+    if (isClassical && composer) {
+      // For classical music, prioritize composer + title searches
+      console.log(`[iTunes] Classical music detected. Composer: ${composer}, Performer: ${performer || 'not specified'}`);
+      searches = [
+        `${composer} ${title}`,           // Composer + title (most reliable for classical)
+        `${title} ${composer}`,           // Title + composer
+        searchQuery,                       // User-provided search query
+        title,                            // Title only (piece name is key)
+        ...(performer ? [`${performer} ${title}`, `${performer} ${composer}`] : []),
+        `${composer} ${titleKeywords.slice(0, 3).join(' ')}`,
+      ];
+    } else {
+      // For popular music, use standard artist-based searches
+      searches = [
+        `${title} ${artist}`,
+        searchQuery,
+        `${artist} ${title}`,
+        title,  // Title-only search
+        `${artist} ${titleKeywords.slice(0, 3).join(' ')}`,
+      ];
+    }
+
+    // Remove duplicates and empty strings
+    searches = searches.filter((q, i, arr) => q && arr.indexOf(q) === i);
 
     for (const query of searches) {
       const url = new URL('https://itunes.apple.com/search');
       url.searchParams.set('term', query);
       url.searchParams.set('entity', 'song');
-      url.searchParams.set('limit', '25'); // Increased from 10 for better chances
+      url.searchParams.set('limit', '25');
 
-      console.log(`iTunes Search: "${query}"`);
+      console.log(`[iTunes] Search: "${query}"`);
       const response = await fetch(url.toString());
 
       if (!response.ok) {
-        console.error(`iTunes Search API error: ${response.status}`);
+        console.error(`[iTunes] API error: ${response.status}`);
         continue;
       }
 
       const data: iTunesSearchResponse = await response.json();
-      console.log(`iTunes Search returned ${data.resultCount} results`);
+      console.log(`[iTunes] Search returned ${data.resultCount} results`);
 
-      // Find a result that matches both title and artist
+      // Find a result that matches the title
       for (const result of data.results) {
         const titleMatches = stringsMatch(result.trackName, title);
-        const artistMatches = stringsMatch(result.artistName, artist);
 
-        if (titleMatches && artistMatches) {
-          console.log(`Verified Apple Music match: "${result.trackName}" by ${result.artistName}`);
-          console.log(`URL: ${result.trackViewUrl}`);
-          return { appleMusicUrl: result.trackViewUrl };
-        }
-      }
+        if (!titleMatches) continue;
 
-      // Check for partial matches (artist + title keywords)
-      for (const result of data.results) {
-        const artistMatches = stringsMatch(result.artistName, artist);
-        if (artistMatches) {
-          // Check if track name contains key words from the title
-          const trackNorm = normalizeString(result.trackName);
-          const keywordMatches = titleKeywords.filter(kw => trackNorm.includes(kw));
+        // For classical music, accept if artist is composer OR performer
+        if (isClassical && composer) {
+          const artistIsComposer = stringsMatch(result.artistName, composer);
+          const artistIsPerformer = performer && stringsMatch(result.artistName, performer);
+          const artistIsListed = stringsMatch(result.artistName, artist);
 
-          if (keywordMatches.length >= Math.min(2, titleKeywords.length)) {
-            console.log(`Keyword match (${keywordMatches.length}/${titleKeywords.length} keywords): "${result.trackName}" by ${result.artistName}`);
-            console.log(`URL: ${result.trackViewUrl}`);
+          if (artistIsComposer || artistIsPerformer || artistIsListed) {
+            console.log(`[iTunes] Classical match: "${result.trackName}" by ${result.artistName}`);
+            console.log(`[iTunes] URL: ${result.trackViewUrl}`);
             return { appleMusicUrl: result.trackViewUrl };
           }
+        } else {
+          // For non-classical, require artist match
+          const artistMatches = stringsMatch(result.artistName, artist);
+          if (artistMatches) {
+            console.log(`[iTunes] Match: "${result.trackName}" by ${result.artistName}`);
+            console.log(`[iTunes] URL: ${result.trackViewUrl}`);
+            return { appleMusicUrl: result.trackViewUrl };
+          }
+        }
+      }
 
-          // Store first artist match as fallback
-          if (!bestArtistMatch) {
-            bestArtistMatch = result;
-            console.log(`Stored artist-only fallback: "${result.trackName}" by ${result.artistName}`);
+      // Check for partial matches (title keywords)
+      for (const result of data.results) {
+        const trackNorm = normalizeString(result.trackName);
+        const keywordMatches = titleKeywords.filter(kw => trackNorm.includes(kw));
+
+        // Need at least 2 keywords (or all if fewer than 2)
+        if (keywordMatches.length < Math.min(2, titleKeywords.length)) continue;
+
+        // For classical, accept if artist is composer or performer
+        if (isClassical && composer) {
+          const artistIsComposer = stringsMatch(result.artistName, composer);
+          const artistIsPerformer = performer && stringsMatch(result.artistName, performer);
+          const artistIsListed = stringsMatch(result.artistName, artist);
+
+          if (artistIsComposer || artistIsPerformer || artistIsListed) {
+            console.log(`[iTunes] Classical keyword match (${keywordMatches.length}/${titleKeywords.length}): "${result.trackName}" by ${result.artistName}`);
+            console.log(`[iTunes] URL: ${result.trackViewUrl}`);
+            return { appleMusicUrl: result.trackViewUrl };
+          }
+        } else {
+          const artistMatches = stringsMatch(result.artistName, artist);
+          if (artistMatches) {
+            console.log(`[iTunes] Keyword match (${keywordMatches.length}/${titleKeywords.length}): "${result.trackName}" by ${result.artistName}`);
+            console.log(`[iTunes] URL: ${result.trackViewUrl}`);
+            return { appleMusicUrl: result.trackViewUrl };
           }
         }
       }
     }
 
-    // Fallback: Accept artist-only match if we found one
-    // Better to have a link to a different piece by the same composer than no link at all
-    if (bestArtistMatch) {
-      console.log(`Using artist-only fallback: "${bestArtistMatch.trackName}" by ${bestArtistMatch.artistName}`);
-      console.log(`URL: ${bestArtistMatch.trackViewUrl}`);
-      return { appleMusicUrl: bestArtistMatch.trackViewUrl };
-    }
-
-    console.log(`Could not verify Apple Music link for: "${title}" by ${artist}`);
+    console.log(`[iTunes] Could not find: "${title}" by ${artist}`);
     return null;
   } catch (error) {
-    console.error('Error resolving Apple Music link:', error);
+    console.error('[iTunes] Error:', error);
     return null;
   }
 }

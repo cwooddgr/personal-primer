@@ -69,6 +69,8 @@ export interface DailyBundle {
   music: {
     title: string;
     artist: string;
+    composer?: string;   // For classical: the composer
+    performer?: string;  // For classical: the performer
     appleMusicUrl: string;
   };
   image: {

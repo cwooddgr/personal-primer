@@ -174,3 +174,9 @@ export async function getHistory(
   const query = params.toString();
   return fetchAPI<{ bundles: DailyBundle[] }>(`/history${query ? `?${query}` : ''}`);
 }
+
+export async function getConversationHistory(
+  date: string
+): Promise<{ conversation: Conversation | null }> {
+  return fetchAPI<{ conversation: Conversation | null }>(`/history/${date}/conversation`);
+}

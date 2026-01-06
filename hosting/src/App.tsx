@@ -5,6 +5,7 @@ import { getAuth, onAuthStateChanged, User, signInWithEmailAndPassword } from 'f
 import TodayView from './views/TodayView';
 import HistoryView from './views/HistoryView';
 import ArcView from './views/ArcView';
+import ConversationHistoryView from './views/ConversationHistoryView';
 
 // Firebase config - replace with your project's config
 const firebaseConfig = {
@@ -106,6 +107,7 @@ function App() {
           <Route path="/" element={<TodayView />} />
           <Route path="/arc" element={<ArcView />} />
           <Route path="/history" element={<HistoryView />} />
+          <Route path="/history/:date/conversation" element={<ConversationHistoryView />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

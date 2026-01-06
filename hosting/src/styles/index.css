@@ -547,6 +547,41 @@ body {
   margin-bottom: 0.25rem;
 }
 
+.conversation-link {
+  display: inline-block;
+  margin-top: 0.75rem;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.conversation-link:hover {
+  text-decoration: underline;
+}
+
+/* Conversation History View */
+.conversation-history-view h1 {
+  margin-bottom: 2rem;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 1.5rem;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.back-link:hover {
+  color: var(--color-text);
+}
+
+.chat-interface.read-only {
+  margin-top: 0;
+}
+
 /* Responsive */
 @media (max-width: 600px) {
   body {

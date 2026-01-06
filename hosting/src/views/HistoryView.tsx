@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { getHistory, DailyBundle } from '../api/client';
 
 function HistoryView() {
@@ -57,6 +58,9 @@ function HistoryView() {
               <p>
                 <strong>Text:</strong> {bundle.text.source} &mdash; {bundle.text.author}
               </p>
+              <Link to={`/history/${bundle.id}/conversation`} className="conversation-link">
+                View conversation &rarr;
+              </Link>
             </div>
           </li>
         ))}

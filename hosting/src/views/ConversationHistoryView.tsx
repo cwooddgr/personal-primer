@@ -102,8 +102,12 @@ function ConversationHistoryView() {
       <section className="chat-interface read-only">
         <h2>Conversation</h2>
 
+        <p className="chat-prompt">
+          Share your thoughts on today's encounter...
+        </p>
+
         {messages.length === 0 ? (
-          <p className="empty-state">No conversation for this day.</p>
+          <p className="empty-state">No messages recorded.</p>
         ) : (
           <div className="messages">
             {messages.map((msg, index) => (

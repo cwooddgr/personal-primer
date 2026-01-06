@@ -191,8 +191,20 @@ export async function getHistory(
   return fetchAPI<HistoryResponse>(`/history${query ? `?${query}` : ''}`);
 }
 
+export interface ConversationHistoryResponse {
+  conversation: Conversation | null;
+  bundle: DailyBundle;
+  arc: {
+    id: string;
+    theme: string;
+    description: string;
+    targetDurationDays: number;
+  } | null;
+  dayInArc: number;
+}
+
 export async function getConversationHistory(
   date: string
-): Promise<{ conversation: Conversation | null }> {
-  return fetchAPI<{ conversation: Conversation | null }>(`/history/${date}/conversation`);
+): Promise<ConversationHistoryResponse> {
+  return fetchAPI<ConversationHistoryResponse>(`/history/${date}/conversation`);
 }

@@ -164,15 +164,31 @@ export async function getArc(): Promise<{ arc: Arc; dayInArc: number }> {
   return fetchAPI<{ arc: Arc; dayInArc: number }>('/arc');
 }
 
+export interface ArcSummary {
+  id: string;
+  theme: string;
+  description: string;
+}
+
+export interface ArcWithBundles {
+  arc: ArcSummary;
+  bundles: DailyBundle[];
+}
+
+export interface HistoryResponse {
+  arcGroups: ArcWithBundles[];
+  bundles: DailyBundle[];
+}
+
 export async function getHistory(
   limit?: number,
   before?: string
-): Promise<{ bundles: DailyBundle[] }> {
+): Promise<HistoryResponse> {
   const params = new URLSearchParams();
   if (limit) params.set('limit', String(limit));
   if (before) params.set('before', before);
   const query = params.toString();
-  return fetchAPI<{ bundles: DailyBundle[] }>(`/history${query ? `?${query}` : ''}`);
+  return fetchAPI<HistoryResponse>(`/history${query ? `?${query}` : ''}`);
 }
 
 export async function getConversationHistory(

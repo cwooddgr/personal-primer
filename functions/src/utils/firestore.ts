@@ -72,6 +72,12 @@ export async function getActiveArc(): Promise<Arc | null> {
   return null;
 }
 
+export async function getArc(arcId: string): Promise<Arc | null> {
+  const doc = await collections.arcs.doc(arcId).get();
+  if (!doc.exists) return null;
+  return { id: doc.id, ...doc.data() } as Arc;
+}
+
 export async function updateArcPhase(arcId: string, phase: Arc['currentPhase']): Promise<void> {
   await collections.arcs.doc(arcId).update({ currentPhase: phase });
 }

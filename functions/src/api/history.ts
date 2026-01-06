@@ -1,6 +1,15 @@
 import { Request, Response } from 'express';
-import { HistoryQuery } from '../types';
-import { getBundleHistory } from '../utils/firestore';
+import { HistoryQuery, DailyBundle } from '../types';
+import { getBundleHistory, getArc } from '../utils/firestore';
+
+interface ArcWithBundles {
+  arc: {
+    id: string;
+    theme: string;
+    description: string;
+  };
+  bundles: DailyBundle[];
+}
 
 export async function handleGetHistory(req: Request, res: Response): Promise<void> {
   try {
@@ -10,7 +19,37 @@ export async function handleGetHistory(req: Request, res: Response): Promise<voi
 
     const bundles = await getBundleHistory(parsedLimit, before);
 
-    res.json({ bundles });
+    // Group bundles by arcId
+    const bundlesByArc = new Map<string, DailyBundle[]>();
+    const arcOrder: string[] = [];
+
+    for (const bundle of bundles) {
+      if (!bundlesByArc.has(bundle.arcId)) {
+        bundlesByArc.set(bundle.arcId, []);
+        arcOrder.push(bundle.arcId);
+      }
+      bundlesByArc.get(bundle.arcId)!.push(bundle);
+    }
+
+    // Fetch arc info for each unique arcId
+    const arcGroups: ArcWithBundles[] = [];
+    for (const arcId of arcOrder) {
+      const arc = await getArc(arcId);
+      arcGroups.push({
+        arc: arc ? {
+          id: arc.id,
+          theme: arc.theme,
+          description: arc.description,
+        } : {
+          id: arcId,
+          theme: 'Unknown Arc',
+          description: '',
+        },
+        bundles: bundlesByArc.get(arcId)!,
+      });
+    }
+
+    res.json({ arcGroups, bundles });
   } catch (error) {
     console.error('Error in GET /api/history:', error);
     res.status(500).json({ error: 'Failed to get history' });

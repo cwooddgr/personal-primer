@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getHistory, DailyBundle } from '../api/client';
+import { getHistory, ArcWithBundles } from '../api/client';
 
 function HistoryView() {
-  const [bundles, setBundles] = useState<DailyBundle[]>([]);
+  const [arcGroups, setArcGroups] = useState<ArcWithBundles[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -11,7 +11,7 @@ function HistoryView() {
     async function loadHistory() {
       try {
         const response = await getHistory(30);
-        setBundles(response.bundles);
+        setArcGroups(response.arcGroups);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load');
       } finally {
@@ -30,7 +30,7 @@ function HistoryView() {
     return <div className="error-message">{error}</div>;
   }
 
-  if (bundles.length === 0) {
+  if (arcGroups.length === 0) {
     return (
       <div className="history-view">
         <h1>History</h1>
@@ -43,28 +43,37 @@ function HistoryView() {
     <div className="history-view">
       <h1>History</h1>
 
-      <ul className="history-list">
-        {bundles.map((bundle) => (
-          <li key={bundle.id} className="history-item">
-            <span className="history-date">{bundle.id}</span>
-            <div className="history-summary">
-              <p>
-                <strong>Music:</strong> {bundle.music.title} by {bundle.music.artist}
-              </p>
-              <p>
-                <strong>Image:</strong> {bundle.image.title}
-                {bundle.image.artist && ` by ${bundle.image.artist}`}
-              </p>
-              <p>
-                <strong>Text:</strong> {bundle.text.source} &mdash; {bundle.text.author}
-              </p>
-              <Link to={`/history/${bundle.id}/conversation`} className="conversation-link">
-                View conversation &rarr;
-              </Link>
-            </div>
-          </li>
-        ))}
-      </ul>
+      {arcGroups.map((group) => (
+        <section key={group.arc.id} className="history-arc-group">
+          <h2 className="history-arc-theme">{group.arc.theme}</h2>
+          {group.arc.description && (
+            <p className="history-arc-description">{group.arc.description}</p>
+          )}
+
+          <ul className="history-list">
+            {group.bundles.map((bundle) => (
+              <li key={bundle.id} className="history-item">
+                <span className="history-date">{bundle.id}</span>
+                <div className="history-summary">
+                  <p>
+                    <strong>Music:</strong> {bundle.music.title} by {bundle.music.artist}
+                  </p>
+                  <p>
+                    <strong>Image:</strong> {bundle.image.title}
+                    {bundle.image.artist && ` by ${bundle.image.artist}`}
+                  </p>
+                  <p>
+                    <strong>Text:</strong> {bundle.text.source} &mdash; {bundle.text.author}
+                  </p>
+                  <Link to={`/history/${bundle.id}/conversation`} className="conversation-link">
+                    View conversation &rarr;
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
     </div>
   );
 }

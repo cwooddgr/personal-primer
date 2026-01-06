@@ -519,7 +519,6 @@ body {
 
 /* Arc View */
 .arc-view {
-  text-align: center;
   padding: 2rem 0;
 }
 
@@ -535,9 +534,9 @@ body {
   text-transform: capitalize;
 }
 
-.arc-description {
-  max-width: 500px;
-  margin: 2rem auto;
+.arc-view .arc-description {
+  margin-top: 2rem;
+  max-width: 600px;
 }
 
 .arc-progress {

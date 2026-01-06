@@ -172,8 +172,8 @@ export async function extractAndEndSession(bundleId: string, bundle: DailyBundle
     if (dayInArc >= arc.targetDurationDays) {
       console.log(`Arc "${arc.theme}" completed on day ${dayInArc}. Generating summary and next arc...`);
 
-      // Generate arc summary and create next arc
-      arcCompletion = await generateArcCompletion(arc);
+      // Generate arc summary and create next arc (pass conversation so explicit theme requests are honored)
+      arcCompletion = await generateArcCompletion(arc, conversation);
 
       // Mark the current arc as completed
       await completeArc(arc.id);

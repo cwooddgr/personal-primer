@@ -1,4 +1,4 @@
-import { Arc, DailyBundle, SessionInsights, ArcCompletionData } from '../types';
+import { Arc, DailyBundle, SessionInsights, ArcCompletionData, Conversation } from '../types';
 import {
   getArcBundles,
   getArcInsights,
@@ -29,11 +29,14 @@ Write as a thoughtful companion looking back on a shared journey, not as a teach
 
 const NEXT_ARC_SYSTEM_PROMPT = `You are designing the next thematic arc for Personal Primer, a daily intellectual formation guide.
 
-Based on the just-completed arc and the user's revealed interests, suggest a new theme that:
+Based on the just-completed arc, the user's revealed interests, and especially the final day's conversation, suggest a new theme that:
+- Honors any explicit requests or agreements about the next theme from the conversation
 - Feels like a natural progression or interesting contrast
 - Opens new territory while honoring what came before
 - Is broad enough for 7 days of varied artifacts (music, art, literature)
 - Invites curiosity rather than demanding expertise
+
+IMPORTANT: If the user explicitly discussed or agreed on a theme for the next arc in the final conversation, you should honor that request. The user's explicit preferences take priority over inferred interests.
 
 The theme should be a single word or short phrase, with a 2-3 sentence description that sets the tone without over-explaining.`;
 
@@ -73,7 +76,7 @@ Write a retrospective summary. Return as JSON:
 }`;
 }
 
-function buildNextArcPrompt(arc: Arc, insights: SessionInsights[]): string {
+function buildNextArcPrompt(arc: Arc, insights: SessionInsights[], finalConversation: Conversation | null): string {
   const userInterests = insights
     .flatMap(i => i.revealedInterests)
     .filter(i => i);
@@ -82,23 +85,30 @@ function buildNextArcPrompt(arc: Arc, insights: SessionInsights[]): string {
     .flatMap(i => i.personalContext)
     .filter(c => c);
 
+  const conversationText = finalConversation?.messages
+    .map(m => `${m.role.toUpperCase()}: ${m.content}`)
+    .join('\n\n') || '(no conversation recorded)';
+
   return `JUST COMPLETED: "${arc.theme}" arc
 ${arc.description}
 
-USER'S REVEALED INTERESTS (from conversations):
+USER'S REVEALED INTERESTS (from all conversations in this arc):
 ${userInterests.length > 0 ? userInterests.map(i => `- ${i}`).join('\n') : '(none recorded)'}
 
 USER'S BACKGROUND/CONTEXT:
 ${userContext.length > 0 ? userContext.map(c => `- ${c}`).join('\n') : '(none recorded)'}
 
-Suggest the next arc theme. Return as JSON:
+FINAL DAY'S CONVERSATION (pay special attention to any discussion about what the next arc should be):
+${conversationText}
+
+Suggest the next arc theme. If the user expressed a preference for a specific theme in the conversation above, honor that request. Return as JSON:
 {
   "theme": "single word or short phrase",
   "description": "2-3 sentences setting the tone and scope"
 }`;
 }
 
-export async function generateArcCompletion(arc: Arc): Promise<ArcCompletionData> {
+export async function generateArcCompletion(arc: Arc, finalConversation: Conversation | null): Promise<ArcCompletionData> {
   // Gather all bundles and insights from this arc
   const bundles = await getArcBundles(arc.id);
   const insights = await getArcInsights(arc.id);
@@ -109,10 +119,10 @@ export async function generateArcCompletion(arc: Arc): Promise<ArcCompletionData
     buildSummaryPrompt(arc, bundles, insights)
   );
 
-  // Generate next arc
+  // Generate next arc (include final conversation so explicit theme requests are honored)
   const nextArcResult = await generateJSON<LLMNextArc>(
     NEXT_ARC_SYSTEM_PROMPT,
-    buildNextArcPrompt(arc, insights)
+    buildNextArcPrompt(arc, insights, finalConversation)
   );
 
   // Create the new arc in Firestore

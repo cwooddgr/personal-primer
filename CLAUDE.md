@@ -73,13 +73,16 @@ Each day delivers exactly four elements that cohere around the current arc theme
 ### Bundle Generation Flow
 1. Gather context (arc, recent exposures, insights, recent creators)
 2. Calculate day in arc (bundle count + 1, since generating a new bundle) and phase (early/middle/late)
-3. LLM selects artifacts with search queries
-4. On final day of arc, special framing instructions prompt closure
-5. Resolve and validate links with retry logic:
+3. LLM selects artifacts with search queries (prompt includes explicit coherence rules)
+4. **Coherence validation:** Second LLM call checks for cross-reference mismatches
+   - If text mentions artist X, image must be by artist X
+   - If coherence issues found, replacement artifacts are requested
+5. On final day of arc, special framing instructions prompt closure
+6. Resolve and validate links with retry logic:
    - **Music:** Up to 5 retries with iTunes API, classical-aware search (see below)
-   - **Image:** Up to 3 retries with Wikimedia Commons API
+   - **Image:** Up to 3 retries with Wikimedia Commons API, uses LLM-provided `searchQuery` first
    - **Text:** Programmatic validation against recent authors (normalized name comparison), up to 3 retries if author appeared in last 14 days
-6. Persist bundle and exposure records (including creator info)
+7. Persist bundle and exposure records (including creator info)
 
 ### Classical Music Search
 For classical music, the LLM provides additional fields: `composer`, `performer`, `isClassical`. The search strategy differs:
@@ -88,6 +91,22 @@ For classical music, the LLM provides additional fields: `composer`, `performer`
 - Title must match - will NOT return unrelated works by the same performer
 - No artist-only fallback (removed to prevent returning wrong pieces like "Here Comes the Sun" when searching for "Fratres")
 - For exposures, stores the composer (not performer) as `creator` to avoid same-composer repeats
+
+### Image Resolution
+Images are resolved via Wikimedia Commons API with a multi-strategy search:
+1. LLM-provided `searchQuery` (tried first - this is purpose-crafted for the artwork)
+2. `{title} {artist}` combination
+3. `{artist} {title}` (reversed)
+4. `{title}` only
+5. Fallback: Google Custom Search → Wikipedia page → extract image via Wikimedia API
+
+The `searchQuery` parameter from the LLM is critical—it often includes specifics like "Chagall I and the Village painting 1911" that improve match accuracy.
+
+### Artifact Coherence Validation
+After artifact selection, a second LLM call validates coherence:
+- **Strict checks:** If text explicitly mentions an artist (e.g., "as Chagall understood..."), the image must be by that artist
+- **Lenient checks:** General thematic connections (e.g., shared motif of dreams) are acceptable without explicit cross-references
+- When issues are detected, replacement artifacts are requested with context about the required coherence
 
 ### Conversation Context
 System prompts include: today's artifacts, current arc info, user insights from past sessions. Guide tone is curious companion, not instructor.

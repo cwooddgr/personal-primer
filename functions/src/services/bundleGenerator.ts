@@ -36,7 +36,16 @@ const BUNDLE_SELECTION_SYSTEM_PROMPT = `You are the curator for Personal Primer,
 
 Your role is to select today's artifacts: one piece of music, one image, and one quote or literary excerpt. All three should cohere around the current arc theme and be appropriate for the arc phase.
 
-CRITICAL RULES:
+CRITICAL COHERENCE RULES:
+- All three artifacts MUST form a coherent ensemble—they should feel like they belong together
+- If the text quote MENTIONS a specific artist by name, that artist's work MUST be the selected image
+- If the text quote DESCRIBES or REFERENCES a specific artwork, that artwork MUST be the selected image
+- If selecting a text about visual art, the image MUST be BY or RELATED TO what the text discusses
+- Example: If text says "as Chagall understood..." the image MUST be a Chagall painting
+- Example: If text is about Japanese aesthetics, don't select a French Baroque painting
+- Before finalizing, verify: does the image directly relate to any artists or artworks mentioned in the text?
+
+CRITICAL CONTENT RULES:
 - All artifacts must be REAL, EXISTING works—never synthesize, paraphrase, or create original content
 - The text MUST be a verbatim quote from an actual published source (book, essay, poem, speech, etc.)
 - NEVER attribute text to "synthesis", "adaptation", "after [author]", or similar—only use exact quotes with accurate attribution
@@ -118,6 +127,130 @@ Suggest an alternative text/quote that:
 - Is a real, verbatim quote from an actual published source
 
 Return ONLY a JSON object with the new text selection.`;
+
+// Coherence validation
+const COHERENCE_VALIDATION_SYSTEM_PROMPT = `You are validating artifact coherence for Personal Primer.
+
+Review the selected artifacts and check for SPECIFIC mismatches:
+1. If the text quote mentions a specific artist's name, is the image by that artist?
+2. If the text discusses a specific artwork by name, is that the selected image?
+3. If the music is by a composer mentioned in the text, is that connection real?
+4. Are all artifacts thematically connected to the arc theme?
+
+Be STRICT about explicit references:
+- If a quote says "as Chagall painted" or mentions "Chagall's vision", the image MUST be by Chagall
+- If a quote discusses "The Starry Night", that specific painting should be the image
+
+Be LENIENT about general thematic connections:
+- If artifacts share a theme (e.g., dreams, nature) without explicit cross-references, that's fine
+
+Return your analysis as JSON.`;
+
+interface CoherenceIssue {
+  type: 'image' | 'music' | 'text';
+  problem: string;
+  suggestion: string;
+}
+
+interface CoherenceCheck {
+  isCoherent: boolean;
+  issues: CoherenceIssue[];
+}
+
+function buildCoherenceValidationPrompt(
+  arc: Arc,
+  music: MusicSelection,
+  image: ImageSelection,
+  text: TextSelection,
+  framingText: string
+): string {
+  return `ARC THEME: ${arc.theme}
+${arc.description}
+
+SELECTED ARTIFACTS:
+- MUSIC: "${music.title}" by ${music.artist}${music.composer ? ` (composer: ${music.composer})` : ''}
+- IMAGE: "${image.title}" by ${image.artist}
+- TEXT: "${text.content.slice(0, 300)}${text.content.length > 300 ? '...' : ''}" — ${text.author}, ${text.source}
+
+FRAMING TEXT:
+${framingText.slice(0, 500)}...
+
+Check for coherence issues. Does the text mention any specific artist that should match the image?
+
+Return as JSON:
+{
+  "isCoherent": true or false,
+  "issues": [
+    {
+      "type": "image" or "music" or "text",
+      "problem": "specific description of the mismatch",
+      "suggestion": "what should replace it to fix coherence"
+    }
+  ]
+}
+
+If all artifacts cohere well, return {"isCoherent": true, "issues": []}`;
+}
+
+function buildCoherenceImageReplacement(
+  arc: Arc,
+  failedImage: ImageSelection,
+  text: TextSelection,
+  framingText: string,
+  issue: CoherenceIssue
+): string {
+  return `CURRENT ARC: ${arc.theme}
+${arc.description}
+
+CURRENT TEXT (the image must cohere with this):
+"${text.content.slice(0, 400)}${text.content.length > 400 ? '...' : ''}" — ${text.author}
+
+FRAMING CONTEXT:
+${framingText.slice(0, 400)}...
+
+CURRENT IMAGE (needs replacement for coherence):
+"${failedImage.title}" by ${failedImage.artist}
+
+PROBLEM: ${issue.problem}
+REQUIRED: ${issue.suggestion}
+
+Select a new image that properly coheres with the text. If the text mentions a specific artist, choose their work. Return as JSON:
+{
+  "title": "exact title of the artwork",
+  "artist": "artist name",
+  "searchQuery": "search query to find this on Wikimedia Commons"
+}`;
+}
+
+function buildCoherenceTextReplacement(
+  arc: Arc,
+  failedText: TextSelection,
+  image: ImageSelection,
+  framingText: string,
+  issue: CoherenceIssue
+): string {
+  return `CURRENT ARC: ${arc.theme}
+${arc.description}
+
+CURRENT IMAGE (the text must cohere with this):
+"${image.title}" by ${image.artist}
+
+FRAMING CONTEXT:
+${framingText.slice(0, 400)}...
+
+CURRENT TEXT (needs replacement for coherence):
+"${failedText.content.slice(0, 300)}..." — ${failedText.author}
+
+PROBLEM: ${issue.problem}
+REQUIRED: ${issue.suggestion}
+
+Select a new text/quote that properly coheres with the image. Return as JSON:
+{
+  "content": "the quote or excerpt (keep it under 200 words)",
+  "source": "book, poem, or work title",
+  "author": "author name"
+}`;
+}
 
 interface TextSelection {
   content: string;
@@ -307,8 +440,46 @@ export async function generateDailyBundle(bundleId: string): Promise<DailyBundle
     buildSelectionUserPrompt(arc, dayInArc, exposures, insights)
   );
 
+  // Step 2b: Coherence validation
+  let musicSelection: MusicSelection = selection.music;
+  let imageSelection: ImageSelection = selection.image;
+  let textSelection: TextSelection = selection.text;
+
+  const coherenceCheck = await generateJSON<CoherenceCheck>(
+    COHERENCE_VALIDATION_SYSTEM_PROMPT,
+    buildCoherenceValidationPrompt(arc, musicSelection, imageSelection, textSelection, selection.framingText)
+  );
+
+  if (!coherenceCheck.isCoherent && coherenceCheck.issues.length > 0) {
+    console.log(`Coherence issues detected: ${coherenceCheck.issues.length}`);
+
+    for (const issue of coherenceCheck.issues) {
+      console.log(`  - [${issue.type}] ${issue.problem}`);
+
+      if (issue.type === 'image') {
+        // Replace image to match text
+        const replacement = await generateJSON<ImageSelection>(
+          ALTERNATIVE_IMAGE_SYSTEM_PROMPT,
+          buildCoherenceImageReplacement(arc, imageSelection, textSelection, selection.framingText, issue)
+        );
+        console.log(`Coherence fix: replacing image with "${replacement.title}" by ${replacement.artist}`);
+        imageSelection = replacement;
+      } else if (issue.type === 'text') {
+        // Replace text to match image
+        const replacement = await generateJSON<TextSelection>(
+          ALTERNATIVE_TEXT_SYSTEM_PROMPT,
+          buildCoherenceTextReplacement(arc, textSelection, imageSelection, selection.framingText, issue)
+        );
+        console.log(`Coherence fix: replacing text with quote by ${replacement.author}`);
+        textSelection = replacement;
+      }
+      // Note: music coherence issues are rare and not handled here
+    }
+  } else {
+    console.log('Artifacts passed coherence validation');
+  }
+
   // Step 3: Link resolution with retry for music
-  let musicSelection = selection.music;
   const musicOptions: MusicSearchOptions = {
     composer: musicSelection.composer,
     performer: musicSelection.performer,
@@ -352,7 +523,6 @@ export async function generateDailyBundle(bundleId: string): Promise<DailyBundle
   }
 
   // Image link resolution with retry
-  let imageSelection = selection.image;
   let imageLink = await resolveImageLink(
     imageSelection.title,
     imageSelection.artist,
@@ -392,7 +562,6 @@ export async function generateDailyBundle(bundleId: string): Promise<DailyBundle
     }
   }
 
-  let textSelection = selection.text;
   const failedTextSelections: TextSelection[] = [];
 
   // Check if selected author is in recent authors

@@ -360,31 +360,32 @@ export async function resolveImageLink(
   searchQuery: string
 ): Promise<ResolvedImage | null> {
   try {
-    console.log(`Resolving image for: "${title}" by ${artist}`);
+    console.log(`[Image] Resolving: "${title}" by ${artist}`);
+    console.log(`[Image] Using searchQuery: "${searchQuery}"`);
 
-    // First, try Wikimedia Commons directly (best for artwork)
-    const commonsResult = await searchWikimediaCommons(`${title} ${artist}`);
-    if (commonsResult) {
-      console.log(`Image resolved via Commons (title+artist): ${commonsResult.imageUrl}`);
-      return commonsResult;
+    // Build search strategies - searchQuery FIRST since LLM crafted it specifically
+    const searches = [
+      searchQuery,                    // LLM-crafted query (most likely to work)
+      `${title} ${artist}`,           // Title + artist
+      `${artist} ${title}`,           // Reversed order
+      title,                          // Title only
+    ].filter((q, i, arr) => q && q.trim() && arr.indexOf(q) === i);
+
+    // Try each search strategy on Wikimedia Commons
+    for (const query of searches) {
+      console.log(`[Image] Trying Commons search: "${query}"`);
+      const commonsResult = await searchWikimediaCommons(query);
+      if (commonsResult) {
+        console.log(`[Image] Found via Commons ("${query}"): ${commonsResult.imageUrl}`);
+        return commonsResult;
+      }
+      await sleep(500); // Rate limiting between attempts
     }
-
-    // Add delay to avoid rate limiting
-    await sleep(500);
-
-    // Try with just the title
-    const commonsTitleResult = await searchWikimediaCommons(title);
-    if (commonsTitleResult) {
-      console.log(`Image resolved via Commons (title only): ${commonsTitleResult.imageUrl}`);
-      return commonsTitleResult;
-    }
-
-    // Add delay before Google fallback
-    await sleep(500);
 
     // Fallback: Use Google to find Wikipedia page, then extract image
-    const query = `${title} ${artist} wikipedia`;
-    const results = await googleSearch(query);
+    const googleQuery = searchQuery || `${title} ${artist} wikipedia`;
+    console.log(`[Image] Falling back to Google: "${googleQuery}"`);
+    const results = await googleSearch(googleQuery);
 
     for (const result of results) {
       if (result.link.includes('wikipedia.org/wiki/')) {
@@ -394,7 +395,7 @@ export async function resolveImageLink(
           const pageTitle = decodeURIComponent(match[1]);
           const imageUrl = await getWikimediaImageUrl(pageTitle);
           if (imageUrl) {
-            console.log(`Found Wikipedia image for ${pageTitle}: ${imageUrl}`);
+            console.log(`[Image] Found Wikipedia image for ${pageTitle}: ${imageUrl}`);
             return {
               sourceUrl: result.link,
               imageUrl: imageUrl,
@@ -404,10 +405,10 @@ export async function resolveImageLink(
       }
     }
 
-    console.log(`No image found for: ${title} by ${artist}`);
+    console.log(`[Image] No image found for: "${title}" by ${artist}`);
     return null;
   } catch (error) {
-    console.error('Error resolving image link:', error);
+    console.error('[Image] Error:', error);
     return null;
   }
 }

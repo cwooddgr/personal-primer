@@ -88,12 +88,42 @@ export async function completeArc(arcId: string): Promise<void> {
   });
 }
 
+export async function updateArc(arcId: string, updates: Partial<Arc>): Promise<void> {
+  await collections.arcs.doc(arcId).update(updates);
+}
+
 export async function createArc(arc: Omit<Arc, 'id'>): Promise<Arc> {
   // Generate a unique ID based on timestamp
   const id = `arc-${Date.now()}`;
   const newArc: Arc = { id, ...arc };
   await collections.arcs.doc(id).set(newArc);
   return newArc;
+}
+
+export async function getPendingArc(): Promise<Arc | null> {
+  // Get the most recently created arc that has no bundles yet
+  const snapshot = await collections.arcs
+    .orderBy('startDate', 'desc')
+    .limit(5)
+    .get();
+
+  if (snapshot.empty) return null;
+
+  for (const doc of snapshot.docs) {
+    const arc = { id: doc.id, ...doc.data() } as Arc;
+    // Check if this arc has any bundles
+    const bundlesSnapshot = await collections.dailyBundles
+      .where('arcId', '==', arc.id)
+      .limit(1)
+      .get();
+
+    if (bundlesSnapshot.empty) {
+      // This arc has no bundles yet - it's pending
+      return arc;
+    }
+  }
+
+  return null;
 }
 
 export async function getArcBundles(arcId: string): Promise<DailyBundle[]> {

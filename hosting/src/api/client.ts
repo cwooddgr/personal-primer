@@ -208,3 +208,26 @@ export async function getConversationHistory(
 ): Promise<ConversationHistoryResponse> {
   return fetchAPI<ConversationHistoryResponse>(`/history/${date}/conversation`);
 }
+
+export interface ArcRefinementMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ArcRefinementResponse {
+  response: string;
+  arcUpdated?: {
+    theme: string;
+    description: string;
+  };
+}
+
+export async function sendArcRefinementMessage(
+  message: string,
+  conversationHistory: ArcRefinementMessage[]
+): Promise<ArcRefinementResponse> {
+  return fetchAPI<ArcRefinementResponse>('/arc/refine/message', {
+    method: 'POST',
+    body: JSON.stringify({ message, conversationHistory }),
+  });
+}

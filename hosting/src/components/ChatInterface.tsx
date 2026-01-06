@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import Markdown from 'react-markdown';
-import { sendMessage, endSession, Conversation, ConversationMessage, SuggestedReading, ArcCompletionData } from '../api/client';
+import { sendMessage, endSession, sendArcRefinementMessage, Conversation, ConversationMessage, SuggestedReading, ArcCompletionData, ArcRefinementMessage } from '../api/client';
 
 interface ChatInterfaceProps {
   initialConversation: Conversation | null;
@@ -25,6 +25,8 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
   const [ending, setEnding] = useState(false);
   const [suggestedReading, setSuggestedReading] = useState<SuggestedReading | undefined>(initialSuggestedReading);
   const [arcCompletion, setArcCompletion] = useState<ArcCompletionData | undefined>();
+  const [refiningArc, setRefiningArc] = useState(false);
+  const [refinementMessages, setRefinementMessages] = useState<ArcRefinementMessage[]>([]);
 
   const handleSend = async () => {
     if (!input.trim() || sending || sessionEnded) {
@@ -111,8 +113,67 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      if (refiningArc) {
+        handleSendRefinement();
+      } else {
+        handleSend();
+      }
     }
+  };
+
+  const handleStartRefinement = () => {
+    console.log('[ChatInterface] Starting arc refinement');
+    setRefiningArc(true);
+    // Add initial assistant message
+    setRefinementMessages([{
+      role: 'assistant',
+      content: "I'd love to help you find a theme that feels right. What kind of territory would you like to explore? Is there something specific that's been on your mind, or would you prefer I suggest some alternatives?",
+    }]);
+  };
+
+  const handleSendRefinement = async () => {
+    if (!input.trim() || sending) return;
+
+    const userMessage = input.trim();
+    console.log('[ChatInterface] Sending refinement message:', userMessage.substring(0, 50));
+    setInput('');
+    setSending(true);
+
+    // Optimistically add user message
+    const updatedMessages: ArcRefinementMessage[] = [...refinementMessages, { role: 'user', content: userMessage }];
+    setRefinementMessages(updatedMessages);
+
+    try {
+      const response = await sendArcRefinementMessage(userMessage, refinementMessages);
+      console.log('[ChatInterface] Refinement response:', {
+        hasArcUpdated: !!response.arcUpdated,
+      });
+
+      // Add assistant response
+      setRefinementMessages([...updatedMessages, { role: 'assistant', content: response.response }]);
+
+      // If arc was updated, update the display and exit refinement mode
+      if (response.arcUpdated && arcCompletion) {
+        setArcCompletion({
+          ...arcCompletion,
+          nextArc: response.arcUpdated,
+        });
+        setRefiningArc(false);
+        setRefinementMessages([]);
+      }
+    } catch (error) {
+      console.error('[ChatInterface] Refinement message failed:', error);
+      // Remove optimistic message on error
+      setRefinementMessages(refinementMessages);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleCancelRefinement = () => {
+    setRefiningArc(false);
+    setRefinementMessages([]);
+    setInput('');
   };
 
   return (
@@ -155,7 +216,14 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
                 <Markdown>{arcCompletion.summary}</Markdown>
               </div>
               <div className="next-arc-preview">
-                <p className="next-arc-label">Coming tomorrow</p>
+                <div className="next-arc-header">
+                  <p className="next-arc-label">Coming tomorrow</p>
+                  {!refiningArc && (
+                    <button onClick={handleStartRefinement} className="change-arc-link">
+                      Change
+                    </button>
+                  )}
+                </div>
                 <p className="next-arc-theme">{arcCompletion.nextArc.theme}</p>
                 <p className="next-arc-description">{arcCompletion.nextArc.description}</p>
               </div>
@@ -169,6 +237,47 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
                 {suggestedReading.title}
               </a>
               <p className="suggested-reading-rationale">{suggestedReading.rationale}</p>
+            </div>
+          )}
+
+          {refiningArc && (
+            <div className="arc-refinement">
+              <div className="messages">
+                {refinementMessages.map((msg, index) => (
+                  <div key={index} className={`message ${msg.role}`}>
+                    <div className="message-content">
+                      {msg.role === 'assistant' ? (
+                        <Markdown>{msg.content}</Markdown>
+                      ) : (
+                        msg.content
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {sending && (
+                  <div className="message assistant">
+                    <div className="message-content typing">Thinking...</div>
+                  </div>
+                )}
+              </div>
+              <div className="chat-input-area">
+                <textarea
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Describe what you'd prefer..."
+                  disabled={sending}
+                  rows={2}
+                />
+                <div className="chat-actions">
+                  <button onClick={handleSendRefinement} disabled={!input.trim() || sending}>
+                    Send
+                  </button>
+                  <button onClick={handleCancelRefinement} className="end-session">
+                    Cancel
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>

@@ -10,6 +10,7 @@ import { handleReact } from './api/react';
 import { handleGetArc } from './api/arc';
 import { handleGetHistory } from './api/history';
 import { handleGetConversation } from './api/conversationHistory';
+import { handleRefineArcMessage } from './api/refineArc';
 import { checkInactiveSessions } from './scheduled/inactivityCheck';
 
 // Set global options
@@ -56,6 +57,10 @@ export const api = onRequest(
     // Match /api/history/:date/conversation pattern
     if (path.match(/^\/api\/history\/\d{4}-\d{2}-\d{2}\/conversation$/) && method === 'GET') {
       return handleGetConversation(req, res);
+    }
+
+    if (path === '/api/arc/refine/message' && method === 'POST') {
+      return handleRefineArcMessage(req, res);
     }
 
     res.status(404).json({ error: 'Not found' });

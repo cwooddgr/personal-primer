@@ -24,7 +24,7 @@ function getErrorMessage(error: unknown): string {
   return 'An unexpected error occurred';
 }
 
-export async function handleGetToday(req: Request, res: Response): Promise<void> {
+export async function handleGetToday(req: Request, res: Response, userId: string): Promise<void> {
   try {
     const dateParam = req.query.date as string;
     if (!dateParam) {
@@ -34,24 +34,24 @@ export async function handleGetToday(req: Request, res: Response): Promise<void>
     const todayId = validateDateId(dateParam);
 
     // Get or generate today's bundle
-    let bundle = await getBundle(todayId);
+    let bundle = await getBundle(userId, todayId);
 
     if (!bundle) {
-      bundle = await generateDailyBundle(todayId);
+      bundle = await generateDailyBundle(userId, todayId);
     }
 
     // Get conversation if any
-    const conversation = await getConversation(todayId);
+    const conversation = await getConversation(userId, todayId);
 
     // Get current arc
-    const arc = await getActiveArc();
+    const arc = await getActiveArc(userId);
 
     if (!arc) {
       res.status(500).json({ error: 'No active arc found. Please create an arc in Firestore.' });
       return;
     }
 
-    const dayInArc = await calculateDayInArc(arc);
+    const dayInArc = await calculateDayInArc(userId, arc);
 
     const response: TodayResponse = {
       bundle,

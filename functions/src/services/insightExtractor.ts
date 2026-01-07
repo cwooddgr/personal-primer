@@ -77,14 +77,14 @@ interface ExtractionResult {
   suggestedReading: SuggestedReading | null;
 }
 
-export async function extractInsights(bundleId: string, bundle: DailyBundle): Promise<ExtractionResult | null> {
-  const conversation = await getConversation(bundleId);
+export async function extractInsights(userId: string, bundleId: string, bundle: DailyBundle): Promise<ExtractionResult | null> {
+  const conversation = await getConversation(userId, bundleId);
 
   if (!conversation || conversation.messages.length === 0) {
     return null;
   }
 
-  const arc = await getActiveArc();
+  const arc = await getActiveArc(userId);
   if (!arc) {
     return null;
   }
@@ -106,7 +106,7 @@ export async function extractInsights(bundleId: string, bundle: DailyBundle): Pr
     rawSummary: extraction.rawSummary || '',
   };
 
-  await createSessionInsights(insights);
+  await createSessionInsights(userId, insights);
 
   // Process suggested reading if present
   let suggestedReading: SuggestedReading | null = null;
@@ -124,7 +124,7 @@ export async function extractInsights(bundleId: string, bundle: DailyBundle): Pr
       };
 
       // Update bundle with suggested reading
-      await updateBundleSuggestedReading(bundleId, suggestedReading);
+      await updateBundleSuggestedReading(userId, bundleId, suggestedReading);
       console.log(`Added suggested reading to bundle ${bundleId}: ${suggestedReading.title}`);
     } else {
       console.log(`Could not resolve URL for suggested reading: ${extraction.suggestedReading.title}`);
@@ -132,7 +132,7 @@ export async function extractInsights(bundleId: string, bundle: DailyBundle): Pr
   }
 
   // Mark conversation as ended
-  await updateConversation(bundleId, { sessionEnded: true });
+  await updateConversation(userId, bundleId, { sessionEnded: true });
 
   return { insights, suggestedReading };
 }
@@ -142,8 +142,8 @@ export interface EndSessionResult {
   arcCompletion: ArcCompletionData | null;
 }
 
-export async function extractAndEndSession(bundleId: string, bundle: DailyBundle): Promise<EndSessionResult> {
-  const conversation = await getConversation(bundleId);
+export async function extractAndEndSession(userId: string, bundleId: string, bundle: DailyBundle): Promise<EndSessionResult> {
+  const conversation = await getConversation(userId, bundleId);
 
   if (!conversation) {
     return { suggestedReading: null, arcCompletion: null };
@@ -158,25 +158,25 @@ export async function extractAndEndSession(bundleId: string, bundle: DailyBundle
   let arcCompletion: ArcCompletionData | null = null;
 
   if (conversation.messages.length > 0) {
-    const result = await extractInsights(bundleId, bundle);
+    const result = await extractInsights(userId, bundleId, bundle);
     suggestedReading = result?.suggestedReading || null;
   } else {
     // No messages, just mark as ended
-    await updateConversation(bundleId, { sessionEnded: true });
+    await updateConversation(userId, bundleId, { sessionEnded: true });
   }
 
   // Check if this is the last day of the arc
-  const arc = await getActiveArc();
+  const arc = await getActiveArc(userId);
   if (arc) {
-    const dayInArc = await calculateDayInArc(arc);
+    const dayInArc = await calculateDayInArc(userId, arc);
     if (dayInArc >= arc.targetDurationDays) {
       console.log(`Arc "${arc.theme}" completed on day ${dayInArc}. Generating summary and next arc...`);
 
       // Generate arc summary and create next arc (pass conversation so explicit theme requests are honored)
-      arcCompletion = await generateArcCompletion(arc, conversation);
+      arcCompletion = await generateArcCompletion(userId, arc, conversation);
 
       // Mark the current arc as completed
-      await completeArc(arc.id);
+      await completeArc(userId, arc.id);
       console.log(`Marked arc "${arc.theme}" as completed`);
     }
   }

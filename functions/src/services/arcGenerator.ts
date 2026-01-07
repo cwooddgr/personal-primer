@@ -113,10 +113,10 @@ Suggest the next arc theme. If the user expressed a preference for a specific th
 }`;
 }
 
-export async function generateArcCompletion(arc: Arc, finalConversation: Conversation | null): Promise<ArcCompletionData> {
+export async function generateArcCompletion(userId: string, arc: Arc, finalConversation: Conversation | null): Promise<ArcCompletionData> {
   // Gather all bundles and insights from this arc
-  const bundles = await getArcBundles(arc.id);
-  const insights = await getArcInsights(arc.id);
+  const bundles = await getArcBundles(userId, arc.id);
+  const insights = await getArcInsights(userId, arc.id);
 
   // Generate retrospective summary
   const summaryResult = await generateJSON<LLMArcSummary>(
@@ -135,7 +135,7 @@ export async function generateArcCompletion(arc: Arc, finalConversation: Convers
   tomorrow.setDate(tomorrow.getDate() + 1);
   tomorrow.setHours(0, 0, 0, 0);
 
-  await createArc({
+  await createArc(userId, {
     theme: nextArcResult.theme,
     description: nextArcResult.description,
     shortDescription: nextArcResult.shortDescription,

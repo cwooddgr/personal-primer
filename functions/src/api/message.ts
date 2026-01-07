@@ -16,7 +16,7 @@ function getErrorMessage(error: unknown): string {
   return 'Failed to process message';
 }
 
-export async function handlePostMessage(req: Request, res: Response): Promise<void> {
+export async function handlePostMessage(req: Request, res: Response, userId: string): Promise<void> {
   try {
     const { message, date } = req.body as MessageRequest;
 
@@ -31,20 +31,20 @@ export async function handlePostMessage(req: Request, res: Response): Promise<vo
     }
 
     const todayId = validateDateId(date);
-    const bundle = await getBundle(todayId);
+    const bundle = await getBundle(userId, todayId);
 
     if (!bundle) {
       res.status(404).json({ error: 'No bundle found for today' });
       return;
     }
 
-    const arc = await getActiveArc();
+    const arc = await getActiveArc(userId);
     if (!arc) {
       res.status(500).json({ error: 'No active arc found' });
       return;
     }
 
-    const { response, conversation, sessionShouldEnd } = await handleMessage(message, bundle, arc);
+    const { response, conversation, sessionShouldEnd } = await handleMessage(userId, message, bundle, arc);
 
     const result: MessageResponse = {
       response,

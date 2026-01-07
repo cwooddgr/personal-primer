@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Personal Primer is a personal web application that delivers a single, thoughtful daily intellectual encounter. It curates four artifacts daily (music, image, text, framing) around ~7 day thematic "arcs."
+Personal Primer is a multi-user web application that delivers a single, thoughtful daily intellectual encounter. It curates four artifacts daily (music, image, text, framing) around ~7 day thematic "arcs."
 
 **Core philosophy:** Formation over education, one intentional encounter per day, no testing/grading/streaks.
 
@@ -15,7 +15,7 @@ Personal Primer is a personal web application that delivers a single, thoughtful
 - **Database:** Firebase Firestore
 - **LLM:** Anthropic Claude API (claude-opus-4-5-20251101) via @anthropic-ai/sdk
 - **Link Resolution:** Google Custom Search API
-- **Authentication:** Firebase Auth (single user)
+- **Authentication:** Firebase Auth (multi-user with email whitelist)
 
 ## Build and Deploy Commands
 
@@ -45,6 +45,26 @@ firebase deploy --only hosting     # Deploy only hosting
 
 ## Architecture
 
+### Multi-User Data Structure
+All user data is stored in subcollections under `/users/{userId}/`:
+```
+/users/{userId}/
+  /arcs/{arcId}
+  /dailyBundles/{YYYY-MM-DD}
+  /exposures/{autoId}
+  /conversations/{YYYY-MM-DD}
+  /sessionInsights/{YYYY-MM-DD}
+  /userReactions/{autoId}
+
+/allowedEmails/{normalizedEmail}  (whitelist for registration)
+/users/{userId}                    (user profile documents)
+```
+
+### Authentication Flow
+1. **Registration:** User submits email/password → Backend checks `/allowedEmails` whitelist → Creates Firebase Auth user
+2. **Login:** Standard Firebase Auth email/password
+3. **API Calls:** Frontend sends ID token in `Authorization: Bearer` header → Backend verifies with `admin.auth().verifyIdToken()`
+
 ### Daily Bundle Structure (Fixed)
 Each day delivers exactly four elements that cohere around the current arc theme:
 1. **Music** - One piece with Apple Music link (validated)
@@ -52,23 +72,19 @@ Each day delivers exactly four elements that cohere around the current arc theme
 3. **Text** - One quote or literary excerpt
 4. **Framing** - 2-3 paragraph introduction connecting to recent days
 
-### Core Data Collections (Firestore)
-- `arcs` - Thematic journeys (~7 bundles each with early/middle/late phases, includes `completedDate` when finished, `shortDescription` for UI display)
-- `dailyBundles` - Daily content (keyed by YYYY-MM-DD, includes optional `suggestedReading`)
-- `exposures` - Tracks shown artifacts to prevent repetition (includes `creator` to avoid same-creator bundles)
-- `conversations` - Chat history for each day's bundle (includes `sessionEnded` flag)
-- `sessionInsights` - Extracted learnings from conversations
-- `userReactions` - User feedback on artifacts
-
 ### API Endpoints
-- `GET /api/today` - Returns today's bundle (generates if needed), includes arc info and dayInArc (actual bundle count)
-- `POST /api/today/message` - Send conversation message (returns `sessionShouldEnd` flag for smart ending)
-- `POST /api/today/end-session` - End session, extract insights (returns `suggestedReading` and `arcCompletion` if final day)
+All endpoints require authentication (except `/api/auth/*`):
+- `POST /api/auth/register` - Register new user (checks whitelist)
+- `POST /api/auth/forgot-password` - Send password reset email
+- `POST /api/auth/resend-verification` - Resend email verification
+- `GET /api/today` - Returns today's bundle (generates if needed), includes arc info and dayInArc
+- `POST /api/today/message` - Send conversation message (returns `sessionShouldEnd` flag)
+- `POST /api/today/end-session` - End session, extract insights
 - `POST /api/today/react` - Record reaction to artifact
 - `GET /api/arc` - Get current arc
 - `GET /api/history` - Past bundles (paginated)
-- `GET /api/history/:date/conversation` - Get conversation history for a specific date with full context
-- `POST /api/arc/refine/message` - Refine next arc theme via conversation (returns `arcUpdated` when theme confirmed)
+- `GET /api/history/:date/conversation` - Get conversation history for a specific date
+- `POST /api/arc/refine/message` - Refine next arc theme via conversation
 
 ### Bundle Generation Flow
 1. Gather context (arc, recent exposures, insights, recent creators)
@@ -149,20 +165,24 @@ The history page (`/history`) displays past bundles organized by arc:
 - For classical music, composer is stored as `creator` in exposures (not performer) to avoid same-composer repeats
 - Music/image creators are soft-avoided via LLM instructions for non-classical music
 - All links must be validated before delivery (HEAD request, 200 status)
-- Only one arc active at a time
+- Only one arc active at a time per user
 - Arc duration is bundle-count based (skipped days don't advance the arc)
 - Token limit of ~50k for conversation context
 
 ## Key Files
 
-- `functions/src/index.ts` - Cloud Functions entry point, routes all API calls
+- `functions/src/index.ts` - Cloud Functions entry point, routes all API calls with auth middleware
+- `functions/src/middleware/auth.ts` - Token verification middleware
+- `functions/src/api/auth.ts` - Registration, forgot password, verification endpoints
+- `functions/src/utils/firestore.ts` - User-scoped Firestore operations (all functions take userId)
 - `functions/src/services/bundleGenerator.ts` - Generates daily bundles via LLM (includes final day handling)
 - `functions/src/services/conversationManager.ts` - Handles chat with context and session-end detection
 - `functions/src/services/insightExtractor.ts` - Extracts insights and suggested reading from conversations
 - `functions/src/services/arcGenerator.ts` - Generates arc completion summaries and creates next arcs
 - `functions/src/api/refineArc.ts` - Handles arc refinement conversation and theme updates
 - `functions/src/services/linkValidator.ts` - iTunes API for music, Wikimedia API for images, Google Custom Search for readings
-- `functions/src/scheduled/inactivityCheck.ts` - Scheduled function to end stale sessions (every 15 min)
+- `functions/src/scheduled/inactivityCheck.ts` - Scheduled function to end stale sessions across all users (every 15 min)
+- `hosting/src/App.tsx` - Main app with auth UI (login, signup, forgot password, logout)
 - `hosting/src/views/TodayView.tsx` - Main daily view (shows arc shortDescription in header)
 - `hosting/src/views/HistoryView.tsx` - History page with bundles organized by arc
 - `hosting/src/views/ConversationHistoryView.tsx` - Read-only view of past conversations with full bundle context
@@ -175,8 +195,24 @@ The history page (`/history`) displays past bundles organized by arc:
 3. Copy `hosting/.env.example` to `hosting/.env` with your Firebase config
 4. Set up Google Custom Search Engine at programmablesearch.google.com
 5. Run `firebase functions:secrets:set` for all three secrets
-6. Create first arc in Firestore (see `scripts/seed-arc.ts`)
+6. Deploy security rules: `firebase deploy --only firestore:rules`
+7. Add allowed emails to `/allowedEmails` collection in Firestore
+8. Create first arc for each user in Firestore (see `scripts/seed-arc.ts`)
+
+## Managing Users
+
+### Adding a new user
+1. Add their email to `/allowedEmails/{email}` in Firestore Console
+2. User can then register via the signup form
+
+### Migrating existing single-user data
+```bash
+cd functions
+npx ts-node ../scripts/migrate-to-multiuser.ts <userId> <userEmail>
+```
+Get the userId from Firebase Console > Authentication > Users.
 
 ## Debugging Scripts
 
 - `./scripts/delete-today-data.sh` - Deletes today's bundle, conversation, and session insights so it can be regenerated. Exposures must still be deleted manually in Firebase Console (they have auto-generated IDs). Run this when debugging bundle generation issues.
+- `./scripts/migrate-to-multiuser.ts` - Migrates single-user data to multi-user structure under `/users/{userId}/`

@@ -43,7 +43,7 @@ DESCRIPTION: ${pendingDescription}
 They clicked "Change" to explore alternatives. Help them find a theme that resonates.`;
 }
 
-export async function handleRefineArcMessage(req: Request, res: Response): Promise<void> {
+export async function handleRefineArcMessage(req: Request, res: Response, userId: string): Promise<void> {
   try {
     const { message, conversationHistory = [] } = req.body as RefineArcRequest;
 
@@ -53,7 +53,7 @@ export async function handleRefineArcMessage(req: Request, res: Response): Promi
     }
 
     // Get the pending arc (the one we're refining)
-    const pendingArc = await getPendingArc();
+    const pendingArc = await getPendingArc(userId);
     if (!pendingArc) {
       res.status(400).json({ error: 'No pending arc to refine' });
       return;
@@ -95,7 +95,7 @@ export async function handleRefineArcMessage(req: Request, res: Response): Promi
       const newShortDescription = markerMatch[3].trim();
 
       // Update the pending arc
-      await updateArc(pendingArc.id, {
+      await updateArc(userId, pendingArc.id, {
         theme: newTheme,
         description: newDescription,
         shortDescription: newShortDescription,

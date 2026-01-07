@@ -17,30 +17,36 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-// Collection references
-export const collections = {
-  arcs: db.collection('arcs'),
-  dailyBundles: db.collection('dailyBundles'),
-  exposures: db.collection('exposures'),
-  conversations: db.collection('conversations'),
-  sessionInsights: db.collection('sessionInsights'),
-  userReactions: db.collection('userReactions'),
+// Get user-scoped collection references
+function getUserCollections(userId: string) {
+  const userDoc = db.collection('users').doc(userId);
+  return {
+    arcs: userDoc.collection('arcs'),
+    dailyBundles: userDoc.collection('dailyBundles'),
+    exposures: userDoc.collection('exposures'),
+    conversations: userDoc.collection('conversations'),
+    sessionInsights: userDoc.collection('sessionInsights'),
+    userReactions: userDoc.collection('userReactions'),
+  };
+}
+
+// Top-level collections (not user-scoped)
+export const globalCollections = {
+  allowedEmails: db.collection('allowedEmails'),
+  users: db.collection('users'),
 };
 
 // Date helpers
-// Validate and return a date string in YYYY-MM-DD format
 export function validateDateId(dateStr: string | undefined): string {
   if (!dateStr) {
     throw new Error('Date parameter is required');
   }
-  // Validate format YYYY-MM-DD
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
     throw new Error('Invalid date format. Expected YYYY-MM-DD');
   }
   return dateStr;
 }
 
-// Legacy function for backward compatibility (uses UTC)
 export function getTodayId(): string {
   const now = new Date();
   return now.toISOString().split('T')[0];
@@ -50,10 +56,25 @@ export function toTimestamp(date: Date): Timestamp {
   return Timestamp.fromDate(date);
 }
 
+// Whitelist operations
+export async function isEmailAllowed(email: string): Promise<boolean> {
+  const normalizedEmail = email.toLowerCase().trim();
+  const doc = await globalCollections.allowedEmails.doc(normalizedEmail).get();
+  return doc.exists;
+}
+
+export async function addAllowedEmail(email: string, addedBy?: string): Promise<void> {
+  const normalizedEmail = email.toLowerCase().trim();
+  await globalCollections.allowedEmails.doc(normalizedEmail).set({
+    email: normalizedEmail,
+    addedAt: toTimestamp(new Date()),
+    addedBy: addedBy || 'system',
+  });
+}
+
 // Arc operations
-export async function getActiveArc(): Promise<Arc | null> {
-  // Get all arcs ordered by start date, filter for active in memory
-  // This avoids complex index requirements for null checks
+export async function getActiveArc(userId: string): Promise<Arc | null> {
+  const collections = getUserCollections(userId);
   const snapshot = await collections.arcs
     .orderBy('startDate', 'desc')
     .limit(10)
@@ -61,7 +82,6 @@ export async function getActiveArc(): Promise<Arc | null> {
 
   if (snapshot.empty) return null;
 
-  // Find the first arc without a completedDate
   for (const doc of snapshot.docs) {
     const data = doc.data();
     if (!data.completedDate) {
@@ -72,36 +92,40 @@ export async function getActiveArc(): Promise<Arc | null> {
   return null;
 }
 
-export async function getArc(arcId: string): Promise<Arc | null> {
+export async function getArc(userId: string, arcId: string): Promise<Arc | null> {
+  const collections = getUserCollections(userId);
   const doc = await collections.arcs.doc(arcId).get();
   if (!doc.exists) return null;
   return { id: doc.id, ...doc.data() } as Arc;
 }
 
-export async function updateArcPhase(arcId: string, phase: Arc['currentPhase']): Promise<void> {
+export async function updateArcPhase(userId: string, arcId: string, phase: Arc['currentPhase']): Promise<void> {
+  const collections = getUserCollections(userId);
   await collections.arcs.doc(arcId).update({ currentPhase: phase });
 }
 
-export async function completeArc(arcId: string): Promise<void> {
+export async function completeArc(userId: string, arcId: string): Promise<void> {
+  const collections = getUserCollections(userId);
   await collections.arcs.doc(arcId).update({
     completedDate: toTimestamp(new Date()),
   });
 }
 
-export async function updateArc(arcId: string, updates: Partial<Arc>): Promise<void> {
+export async function updateArc(userId: string, arcId: string, updates: Partial<Arc>): Promise<void> {
+  const collections = getUserCollections(userId);
   await collections.arcs.doc(arcId).update(updates);
 }
 
-export async function createArc(arc: Omit<Arc, 'id'>): Promise<Arc> {
-  // Generate a unique ID based on timestamp
+export async function createArc(userId: string, arc: Omit<Arc, 'id'>): Promise<Arc> {
+  const collections = getUserCollections(userId);
   const id = `arc-${Date.now()}`;
   const newArc: Arc = { id, ...arc };
   await collections.arcs.doc(id).set(newArc);
   return newArc;
 }
 
-export async function getPendingArc(): Promise<Arc | null> {
-  // Get the most recently created arc that has no bundles yet
+export async function getPendingArc(userId: string): Promise<Arc | null> {
+  const collections = getUserCollections(userId);
   const snapshot = await collections.arcs
     .orderBy('startDate', 'desc')
     .limit(5)
@@ -111,14 +135,12 @@ export async function getPendingArc(): Promise<Arc | null> {
 
   for (const doc of snapshot.docs) {
     const arc = { id: doc.id, ...doc.data() } as Arc;
-    // Check if this arc has any bundles
     const bundlesSnapshot = await collections.dailyBundles
       .where('arcId', '==', arc.id)
       .limit(1)
       .get();
 
     if (bundlesSnapshot.empty) {
-      // This arc has no bundles yet - it's pending
       return arc;
     }
   }
@@ -126,7 +148,8 @@ export async function getPendingArc(): Promise<Arc | null> {
   return null;
 }
 
-export async function getArcBundles(arcId: string): Promise<DailyBundle[]> {
+export async function getArcBundles(userId: string, arcId: string): Promise<DailyBundle[]> {
+  const collections = getUserCollections(userId);
   const snapshot = await collections.dailyBundles
     .where('arcId', '==', arcId)
     .orderBy('date', 'asc')
@@ -135,7 +158,8 @@ export async function getArcBundles(arcId: string): Promise<DailyBundle[]> {
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DailyBundle));
 }
 
-export async function getArcInsights(arcId: string): Promise<SessionInsights[]> {
+export async function getArcInsights(userId: string, arcId: string): Promise<SessionInsights[]> {
+  const collections = getUserCollections(userId);
   const snapshot = await collections.sessionInsights
     .where('arcId', '==', arcId)
     .orderBy('date', 'asc')
@@ -145,17 +169,20 @@ export async function getArcInsights(arcId: string): Promise<SessionInsights[]> 
 }
 
 // Bundle operations
-export async function getBundle(bundleId: string): Promise<DailyBundle | null> {
+export async function getBundle(userId: string, bundleId: string): Promise<DailyBundle | null> {
+  const collections = getUserCollections(userId);
   const doc = await collections.dailyBundles.doc(bundleId).get();
   if (!doc.exists) return null;
   return { id: doc.id, ...doc.data() } as DailyBundle;
 }
 
-export async function createBundle(bundle: DailyBundle): Promise<void> {
+export async function createBundle(userId: string, bundle: DailyBundle): Promise<void> {
+  const collections = getUserCollections(userId);
   await collections.dailyBundles.doc(bundle.id).set(bundle);
 }
 
-export async function getBundleHistory(limit: number = 30, before?: string): Promise<DailyBundle[]> {
+export async function getBundleHistory(userId: string, limit: number = 30, before?: string): Promise<DailyBundle[]> {
+  const collections = getUserCollections(userId);
   let query = collections.dailyBundles.orderBy('date', 'desc').limit(limit);
 
   if (before) {
@@ -170,14 +197,17 @@ export async function getBundleHistory(limit: number = 30, before?: string): Pro
 }
 
 export async function updateBundleSuggestedReading(
+  userId: string,
   bundleId: string,
   suggestedReading: SuggestedReading
 ): Promise<void> {
+  const collections = getUserCollections(userId);
   await collections.dailyBundles.doc(bundleId).update({ suggestedReading });
 }
 
 // Exposure operations
-export async function getRecentExposures(days: number = 30): Promise<Exposure[]> {
+export async function getRecentExposures(userId: string, days: number = 30): Promise<Exposure[]> {
+  const collections = getUserCollections(userId);
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
 
@@ -189,29 +219,36 @@ export async function getRecentExposures(days: number = 30): Promise<Exposure[]>
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Exposure));
 }
 
-export async function createExposure(exposure: Omit<Exposure, 'id'>): Promise<void> {
+export async function createExposure(userId: string, exposure: Omit<Exposure, 'id'>): Promise<void> {
+  const collections = getUserCollections(userId);
   await collections.exposures.add(exposure);
 }
 
 // Conversation operations
-export async function getConversation(bundleId: string): Promise<Conversation | null> {
+export async function getConversation(userId: string, bundleId: string): Promise<Conversation | null> {
+  const collections = getUserCollections(userId);
   const doc = await collections.conversations.doc(bundleId).get();
   if (!doc.exists) return null;
   return { id: doc.id, ...doc.data() } as Conversation;
 }
 
-export async function createConversation(conversation: Conversation): Promise<void> {
+export async function createConversation(userId: string, conversation: Conversation): Promise<void> {
+  const collections = getUserCollections(userId);
   await collections.conversations.doc(conversation.id).set(conversation);
 }
 
 export async function updateConversation(
+  userId: string,
   bundleId: string,
   updates: Partial<Conversation>
 ): Promise<void> {
+  const collections = getUserCollections(userId);
   await collections.conversations.doc(bundleId).update(updates);
 }
 
-export async function getStaleConversations(cutoffTime: Date): Promise<Conversation[]> {
+// Get stale conversations across all users (for scheduled function)
+export async function getStaleConversationsForUser(userId: string, cutoffTime: Date): Promise<Conversation[]> {
+  const collections = getUserCollections(userId);
   const snapshot = await collections.conversations
     .where('sessionEnded', '==', false)
     .where('lastActivity', '<', toTimestamp(cutoffTime))
@@ -220,8 +257,27 @@ export async function getStaleConversations(cutoffTime: Date): Promise<Conversat
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Conversation));
 }
 
+// Get all user IDs (for scheduled function)
+export async function getAllUserIds(): Promise<string[]> {
+  const snapshot = await globalCollections.users.get();
+  return snapshot.docs.map(doc => doc.id);
+}
+
+// Ensure user document exists
+export async function ensureUserExists(userId: string, email: string): Promise<void> {
+  const userDoc = globalCollections.users.doc(userId);
+  const doc = await userDoc.get();
+  if (!doc.exists) {
+    await userDoc.set({
+      email,
+      createdAt: toTimestamp(new Date()),
+    });
+  }
+}
+
 // Session insights operations
-export async function getRecentInsights(days: number = 14): Promise<SessionInsights[]> {
+export async function getRecentInsights(userId: string, days: number = 14): Promise<SessionInsights[]> {
+  const collections = getUserCollections(userId);
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
 
@@ -233,23 +289,25 @@ export async function getRecentInsights(days: number = 14): Promise<SessionInsig
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SessionInsights));
 }
 
-export async function createSessionInsights(insights: SessionInsights): Promise<void> {
+export async function createSessionInsights(userId: string, insights: SessionInsights): Promise<void> {
+  const collections = getUserCollections(userId);
   await collections.sessionInsights.doc(insights.id).set(insights);
 }
 
 // User reaction operations
-export async function createReaction(reaction: Omit<UserReaction, 'id'>): Promise<void> {
+export async function createReaction(userId: string, reaction: Omit<UserReaction, 'id'>): Promise<void> {
+  const collections = getUserCollections(userId);
   await collections.userReactions.add(reaction);
 }
 
-// Arc phase calculation - counts bundles generated for this arc, not calendar days
-export async function calculateDayInArc(arc: Arc): Promise<number> {
+// Arc phase calculation - counts bundles generated for this arc
+export async function calculateDayInArc(userId: string, arc: Arc): Promise<number> {
+  const collections = getUserCollections(userId);
   const snapshot = await collections.dailyBundles
     .where('arcId', '==', arc.id)
     .count()
     .get();
 
-  // Return actual bundle count (minimum 1 for display purposes)
   return Math.max(1, snapshot.data().count);
 }
 

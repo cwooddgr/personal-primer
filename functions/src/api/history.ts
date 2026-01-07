@@ -11,13 +11,13 @@ interface ArcWithBundles {
   bundles: DailyBundle[];
 }
 
-export async function handleGetHistory(req: Request, res: Response): Promise<void> {
+export async function handleGetHistory(req: Request, res: Response, userId: string): Promise<void> {
   try {
     const { limit, before } = req.query as unknown as HistoryQuery;
 
     const parsedLimit = limit ? Math.min(Math.max(1, Number(limit)), 100) : 30;
 
-    const bundles = await getBundleHistory(parsedLimit, before);
+    const bundles = await getBundleHistory(userId, parsedLimit, before);
 
     // Group bundles by arcId
     const bundlesByArc = new Map<string, DailyBundle[]>();
@@ -34,7 +34,7 @@ export async function handleGetHistory(req: Request, res: Response): Promise<voi
     // Fetch arc info for each unique arcId
     const arcGroups: ArcWithBundles[] = [];
     for (const arcId of arcOrder) {
-      const arc = await getArc(arcId);
+      const arc = await getArc(userId, arcId);
       arcGroups.push({
         arc: arc ? {
           id: arc.id,

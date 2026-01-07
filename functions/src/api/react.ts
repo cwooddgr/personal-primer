@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { ReactRequest } from '../types';
 import { createReaction, getTodayId, toTimestamp } from '../utils/firestore';
 
-export async function handleReact(req: Request, res: Response): Promise<void> {
+export async function handleReact(req: Request, res: Response, userId: string): Promise<void> {
   try {
     const { artifactType, reactionType, notes } = req.body as ReactRequest;
 
@@ -19,7 +19,7 @@ export async function handleReact(req: Request, res: Response): Promise<void> {
 
     const todayId = getTodayId();
 
-    await createReaction({
+    await createReaction(userId, {
       date: toTimestamp(new Date()),
       bundleId: todayId,
       artifactType,

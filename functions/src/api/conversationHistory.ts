@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { getConversation, validateDateId, getBundle, getArc, getArcBundles } from '../utils/firestore';
 
-export async function handleGetConversation(req: Request, res: Response): Promise<void> {
+export async function handleGetConversation(req: Request, res: Response, userId: string): Promise<void> {
   try {
     // Extract date from path: /api/history/:date/conversation
     const pathParts = req.path.split('/');
@@ -12,8 +12,8 @@ export async function handleGetConversation(req: Request, res: Response): Promis
 
     // Fetch conversation, bundle, and arc info
     const [conversation, bundle] = await Promise.all([
-      getConversation(validatedDate),
-      getBundle(validatedDate),
+      getConversation(userId, validatedDate),
+      getBundle(userId, validatedDate),
     ]);
 
     if (!bundle) {
@@ -21,12 +21,12 @@ export async function handleGetConversation(req: Request, res: Response): Promis
       return;
     }
 
-    const arc = await getArc(bundle.arcId);
+    const arc = await getArc(userId, bundle.arcId);
 
     // Calculate day in arc (position of this bundle within the arc)
     let dayInArc = 1;
     if (arc) {
-      const arcBundles = await getArcBundles(arc.id);
+      const arcBundles = await getArcBundles(userId, arc.id);
       const bundleIndex = arcBundles.findIndex(b => b.id === bundle.id);
       dayInArc = bundleIndex >= 0 ? bundleIndex + 1 : 1;
     }

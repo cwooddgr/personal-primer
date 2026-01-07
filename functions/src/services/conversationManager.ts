@@ -137,17 +137,18 @@ function detectSessionEnd(userMessage: string, assistantResponse: string): boole
 }
 
 export async function handleMessage(
+  userId: string,
   userMessage: string,
   bundle: DailyBundle,
   arc: Arc
 ): Promise<{ response: string; conversation: Conversation; sessionShouldEnd: boolean }> {
   const bundleId = bundle.id;
   const now = toTimestamp(new Date());
-  const dayInArc = await calculateDayInArc(arc);
-  const insights = await getRecentInsights(14);
+  const dayInArc = await calculateDayInArc(userId, arc);
+  const insights = await getRecentInsights(userId, 14);
 
   // Get or create conversation
-  let conversation = await getConversation(bundleId);
+  let conversation = await getConversation(userId, bundleId);
 
   if (!conversation) {
     conversation = {
@@ -157,7 +158,7 @@ export async function handleMessage(
       lastActivity: now,
       sessionEnded: false,
     };
-    await createConversation(conversation);
+    await createConversation(userId, conversation);
   }
 
   // Build message history for LLM
@@ -200,7 +201,7 @@ export async function handleMessage(
   conversation.messages.push(userMsg, assistantMsg);
   conversation.lastActivity = toTimestamp(new Date());
 
-  await updateConversation(bundleId, {
+  await updateConversation(userId, bundleId, {
     messages: conversation.messages,
     lastActivity: conversation.lastActivity,
   });

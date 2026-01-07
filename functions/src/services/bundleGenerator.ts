@@ -414,25 +414,25 @@ Select today's artifacts and write the framing text. Return as JSON:
   return prompt;
 }
 
-export async function generateDailyBundle(bundleId: string): Promise<DailyBundle> {
+export async function generateDailyBundle(userId: string, bundleId: string): Promise<DailyBundle> {
   // Step 1: Gather context
-  const arc = await getActiveArc();
+  const arc = await getActiveArc(userId);
   if (!arc) {
     throw new Error('No active arc found. Please create an arc first.');
   }
 
   // Add 1 because we're generating a NEW bundle (not yet in the count)
-  const dayInArc = (await calculateDayInArc(arc)) + 1;
+  const dayInArc = (await calculateDayInArc(userId, arc)) + 1;
   const currentPhase = determinePhase(dayInArc, arc.targetDurationDays);
 
   // Update phase if changed
   if (currentPhase !== arc.currentPhase) {
-    await updateArcPhase(arc.id, currentPhase);
+    await updateArcPhase(userId, arc.id, currentPhase);
     arc.currentPhase = currentPhase;
   }
 
-  const exposures = await getRecentExposures(14);
-  const insights = await getRecentInsights(14);
+  const exposures = await getRecentExposures(userId, 14);
+  const insights = await getRecentInsights(userId, 14);
 
   // Step 2: LLM selection
   const selection = await generateJSON<LLMBundleSelection>(
@@ -613,7 +613,7 @@ export async function generateDailyBundle(bundleId: string): Promise<DailyBundle
     framingText: selection.framingText,
   };
 
-  await createBundle(bundle);
+  await createBundle(userId, bundle);
 
   // Create exposure records
   const exposureBase = {
@@ -625,19 +625,19 @@ export async function generateDailyBundle(bundleId: string): Promise<DailyBundle
   const musicCreator = musicSelection.composer || musicSelection.artist;
 
   await Promise.all([
-    createExposure({
+    createExposure(userId, {
       ...exposureBase,
       artifactType: 'music',
       artifactIdentifier: `${musicSelection.title} - ${musicSelection.artist}`,
       creator: musicCreator,
     }),
-    createExposure({
+    createExposure(userId, {
       ...exposureBase,
       artifactType: 'image',
       artifactIdentifier: `${imageSelection.title} - ${imageSelection.artist}`,
       creator: imageSelection.artist,
     }),
-    createExposure({
+    createExposure(userId, {
       ...exposureBase,
       artifactType: 'text',
       artifactIdentifier: `${textSelection.source} - ${textSelection.author}`,

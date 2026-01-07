@@ -3,7 +3,7 @@ import { getBundle, validateDateId } from '../utils/firestore';
 import { extractAndEndSession } from '../services/insightExtractor';
 import { EndSessionResponse } from '../types';
 
-export async function handleEndSession(req: Request, res: Response): Promise<void> {
+export async function handleEndSession(req: Request, res: Response, userId: string): Promise<void> {
   try {
     const { date } = req.body as { date: string };
     if (!date) {
@@ -11,14 +11,14 @@ export async function handleEndSession(req: Request, res: Response): Promise<voi
       return;
     }
     const todayId = validateDateId(date);
-    const bundle = await getBundle(todayId);
+    const bundle = await getBundle(userId, todayId);
 
     if (!bundle) {
       res.status(404).json({ error: 'No bundle found for today' });
       return;
     }
 
-    const result = await extractAndEndSession(todayId, bundle);
+    const result = await extractAndEndSession(userId, todayId, bundle);
 
     const response: EndSessionResponse = {
       success: true,

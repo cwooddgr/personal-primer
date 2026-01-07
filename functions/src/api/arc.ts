@@ -1,16 +1,16 @@
 import { Request, Response } from 'express';
 import { getActiveArc, calculateDayInArc } from '../utils/firestore';
 
-export async function handleGetArc(req: Request, res: Response): Promise<void> {
+export async function handleGetArc(req: Request, res: Response, userId: string): Promise<void> {
   try {
-    const arc = await getActiveArc();
+    const arc = await getActiveArc(userId);
 
     if (!arc) {
       res.status(404).json({ error: 'No active arc found' });
       return;
     }
 
-    const dayInArc = await calculateDayInArc(arc);
+    const dayInArc = await calculateDayInArc(userId, arc);
 
     res.json({
       arc,

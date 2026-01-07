@@ -238,3 +238,48 @@ export async function sendArcRefinementMessage(
     body: JSON.stringify({ message, conversationHistory }),
   });
 }
+
+// Auth API functions (no auth token required for these)
+export interface RegisterResponse {
+  success: boolean;
+  message: string;
+  userId?: string;
+}
+
+export async function register(email: string, password: string): Promise<RegisterResponse> {
+  const response = await fetch(`${API_BASE}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Registration failed');
+  }
+
+  return data;
+}
+
+export async function forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${API_BASE}/auth/forgot-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Request failed');
+  }
+
+  return data;
+}
+
+export async function resendVerification(): Promise<{ success: boolean; message: string }> {
+  return fetchAPI<{ success: boolean; message: string }>('/auth/resend-verification', {
+    method: 'POST',
+  });
+}

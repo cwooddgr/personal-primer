@@ -60,6 +60,9 @@ function HistoryView() {
                   {isDay1 && group.arc.description && (
                     <p className="history-arc-description">{group.arc.description}</p>
                   )}
+                  {!isDay1 && (group.arc.shortDescription || group.arc.description) && (
+                    <p className="history-arc-description">{group.arc.shortDescription || group.arc.description}</p>
+                  )}
                   <div className="history-summary">
                     <p>
                       <strong>Music:</strong> {bundle.music.title} by {bundle.music.artist}

@@ -71,7 +71,9 @@ function ConversationHistoryView() {
               {arc.theme} &middot; Day {dayInArc} of {arc.targetDurationDays}
             </p>
             {(arc.shortDescription || arc.description) && (
-              <p className="arc-description">{arc.shortDescription || arc.description}</p>
+              <p className="arc-description">
+                {dayInArc === 1 ? arc.description : (arc.shortDescription || arc.description)}
+              </p>
             )}
           </>
         )}

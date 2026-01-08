@@ -651,6 +651,17 @@ body {
   color: var(--color-text-muted);
 }
 
+.history-day-badge {
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.history-item .history-arc-description {
+  margin: 0.75rem 0 0.5rem;
+  font-size: 0.9rem;
+}
+
 .history-summary {
   margin-top: 0.5rem;
 }

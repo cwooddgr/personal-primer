@@ -70,10 +70,11 @@ function ConversationHistoryView() {
             <p className="arc-badge">
               {arc.theme} &middot; Day {dayInArc} of {arc.targetDurationDays}
             </p>
-            {(arc.shortDescription || arc.description) && (
-              <p className="arc-description">
-                {dayInArc === 1 ? arc.description : (arc.shortDescription || arc.description)}
-              </p>
+            {dayInArc === 1 && arc.description && (
+              <p className="arc-description">{arc.description}</p>
+            )}
+            {dayInArc !== 1 && arc.shortDescription && (
+              <p className="arc-description">{arc.shortDescription}</p>
             )}
           </>
         )}

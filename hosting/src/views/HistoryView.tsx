@@ -46,23 +46,19 @@ function HistoryView() {
       {arcGroups.map((group) => (
         <section key={group.arc.id} className="history-arc-group">
           <h2 className="history-arc-theme">{group.arc.theme}</h2>
+          {group.arc.description && (
+            <p className="history-arc-description">{group.arc.description}</p>
+          )}
           <ul className="history-list">
             {group.bundles.map((bundle, index) => {
               // Bundles are newest-first, so day 1 is the last item
               const dayInArc = group.bundles.length - index;
-              const isDay1 = dayInArc === 1;
               return (
                 <li key={bundle.id} className="history-item">
                   <span className="history-date">
                     {bundle.id}
                     <span className="history-day-badge">Day {dayInArc}</span>
                   </span>
-                  {isDay1 && group.arc.description && (
-                    <p className="history-arc-description">{group.arc.description}</p>
-                  )}
-                  {!isDay1 && (group.arc.shortDescription || group.arc.description) && (
-                    <p className="history-arc-description">{group.arc.shortDescription || group.arc.description}</p>
-                  )}
                   <div className="history-summary">
                     <p>
                       <strong>Music:</strong> {bundle.music.title} by {bundle.music.artist}

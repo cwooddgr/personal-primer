@@ -38,6 +38,7 @@ export async function handleGetConversation(req: Request, res: Response, userId:
         id: arc.id,
         theme: arc.theme,
         description: arc.description,
+        shortDescription: arc.shortDescription,
         targetDurationDays: arc.targetDurationDays,
       } : null,
       dayInArc,

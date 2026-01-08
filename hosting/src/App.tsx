@@ -121,6 +121,8 @@ function AuthForm({ onLogin }: { onLogin: () => void }) {
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            autoFocus
             required
           />
           <input
@@ -128,6 +130,7 @@ function AuthForm({ onLogin }: { onLogin: () => void }) {
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
             required
           />
           {error && <p className="error">{error}</p>}
@@ -152,6 +155,8 @@ function AuthForm({ onLogin }: { onLogin: () => void }) {
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            autoFocus
             required
           />
           <input
@@ -159,6 +164,7 @@ function AuthForm({ onLogin }: { onLogin: () => void }) {
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
             required
           />
           <input
@@ -166,6 +172,7 @@ function AuthForm({ onLogin }: { onLogin: () => void }) {
             placeholder="Confirm Password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
+            autoComplete="new-password"
             required
           />
           {error && <p className="error">{error}</p>}
@@ -191,6 +198,8 @@ function AuthForm({ onLogin }: { onLogin: () => void }) {
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            autoFocus
             required
           />
           {error && <p className="error">{error}</p>}

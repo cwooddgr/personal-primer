@@ -77,17 +77,13 @@ function AuthForm({ onLogin }: { onLogin: () => void }) {
     }
 
     try {
-      const result = await register(email, password);
-      setSuccess(result.message);
-      // Switch to login view after successful registration
-      setTimeout(() => {
-        setView('login');
-        resetForm();
-      }, 3000);
+      await register(email, password);
+      // Auto-login after successful registration
+      await signInWithEmailAndPassword(auth, email, password);
+      onLogin();
     } catch (err) {
       console.error('[AuthForm] Registration failed:', err);
       setError(err instanceof Error ? err.message : 'Registration failed');
-    } finally {
       setLoading(false);
     }
   };
@@ -248,11 +244,13 @@ function App() {
   return (
     <div className="app">
       <nav className="nav">
-        <a href="/">Today</a>
-        <a href="/arc">Arc</a>
-        <a href="/history">History</a>
-        <button className="logout-button" onClick={handleLogout}>
-          Sign Out
+        <div className="nav-links">
+          <a href="/">Today</a>
+          <a href="/arc">Arc</a>
+          <a href="/history">History</a>
+        </div>
+        <button className="logout-link" onClick={handleLogout}>
+          Logout
         </button>
       </nav>
 

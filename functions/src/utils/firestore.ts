@@ -124,6 +124,20 @@ export async function createArc(userId: string, arc: Omit<Arc, 'id'>): Promise<A
   return newArc;
 }
 
+export async function createWelcomeArc(userId: string): Promise<Arc> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return createArc(userId, {
+    theme: 'Beginnings',
+    description: 'Every journey starts somewhere. This week we explore the creative spark of first encounters—the tentative opening notes, the initial brushstroke, the words that break silence. These artifacts invite you to notice how things come into being, and perhaps to reflect on your own beginnings with Personal Primer.',
+    shortDescription: 'Exploring the creative spark of first encounters.',
+    startDate: toTimestamp(today),
+    targetDurationDays: 7,
+    currentPhase: 'early',
+  });
+}
+
 export async function getPendingArc(userId: string): Promise<Arc | null> {
   const collections = getUserCollections(userId);
   const snapshot = await collections.arcs

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { TodayResponse } from '../types';
-import { getBundle, getConversation, getActiveArc, validateDateId, calculateDayInArc } from '../utils/firestore';
+import { getBundle, getConversation, getActiveArc, validateDateId, calculateDayInArc, createWelcomeArc } from '../utils/firestore';
 import { generateDailyBundle } from '../services/bundleGenerator';
 
 function getErrorMessage(error: unknown): string {
@@ -33,23 +33,21 @@ export async function handleGetToday(req: Request, res: Response, userId: string
     }
     const todayId = validateDateId(dateParam);
 
-    // Get or generate today's bundle
-    let bundle = await getBundle(userId, todayId);
+    // Get current arc, or create welcome arc for new users
+    let arc = await getActiveArc(userId);
+    if (!arc) {
+      console.log(`[Today] No arc found for user ${userId}, creating welcome arc`);
+      arc = await createWelcomeArc(userId);
+    }
 
+    // Get or generate today's bundle (arc must exist first)
+    let bundle = await getBundle(userId, todayId);
     if (!bundle) {
       bundle = await generateDailyBundle(userId, todayId);
     }
 
     // Get conversation if any
     const conversation = await getConversation(userId, todayId);
-
-    // Get current arc
-    const arc = await getActiveArc(userId);
-
-    if (!arc) {
-      res.status(500).json({ error: 'No active arc found. Please create an arc in Firestore.' });
-      return;
-    }
 
     const dayInArc = await calculateDayInArc(userId, arc);
 

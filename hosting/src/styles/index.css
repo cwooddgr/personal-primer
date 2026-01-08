@@ -32,11 +32,17 @@ body {
 /* Navigation */
 .nav {
   display: flex;
-  gap: 2rem;
+  justify-content: space-between;
+  align-items: center;
   padding: var(--spacing);
   max-width: var(--max-width);
   margin: 0 auto;
   border-bottom: 1px solid var(--color-border);
+}
+
+.nav-links {
+  display: flex;
+  gap: 2rem;
 }
 
 .nav a {
@@ -47,6 +53,20 @@ body {
 }
 
 .nav a:hover {
+  color: var(--color-text);
+}
+
+.logout-link {
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.logout-link:hover {
   color: var(--color-text);
 }
 
@@ -123,6 +143,40 @@ body {
 .login-form .error {
   color: #dc2626;
   font-size: 0.9rem;
+}
+
+.login-form .success {
+  color: #16a34a;
+  font-size: 0.9rem;
+}
+
+.auth-links {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-top: 0.5rem;
+}
+
+.login-form .link-button {
+  background: none;
+  border: none;
+  border-radius: 0;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.login-form .link-button:hover {
+  background: none;
+  color: var(--color-text);
+  text-decoration: underline;
+}
+
+.form-description {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
 }
 
 /* Today View */
@@ -647,7 +701,7 @@ body {
     font-size: 16px;
   }
 
-  .nav {
+  .nav-links {
     gap: 1rem;
   }
 

@@ -50,9 +50,9 @@ function HistoryView() {
             <p className="history-arc-description">{group.arc.description}</p>
           )}
           <ul className="history-list">
-            {group.bundles.map((bundle, index) => {
-              // Bundles are newest-first, so day 1 is the last item
-              const dayInArc = group.bundles.length - index;
+            {[...group.bundles].reverse().map((bundle, index) => {
+              // Display chronologically: day 1 first
+              const dayInArc = index + 1;
               return (
                 <li key={bundle.id} className="history-item">
                   <span className="history-date">

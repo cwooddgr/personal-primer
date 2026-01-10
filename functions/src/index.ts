@@ -14,7 +14,7 @@ import { handleRefineArcMessage } from './api/refineArc';
 import { handleRegister, handleForgotPassword, handleResendVerification } from './api/auth';
 import { checkInactiveSessions } from './scheduled/inactivityCheck';
 import { verifyAuth } from './middleware/auth';
-import { ensureUserExists } from './utils/firestore';
+import { ensureUserExists, getUserProfile, markAboutAsSeen } from './utils/firestore';
 
 // Set global options
 setGlobalOptions({
@@ -90,6 +90,35 @@ export const api = onRequest(
 
     if (path === '/api/arc/refine/message' && method === 'POST') {
       return handleRefineArcMessage(req, res, userId);
+    }
+
+    // User profile endpoints
+    if (path === '/api/user/profile' && method === 'GET') {
+      try {
+        const profile = await getUserProfile(userId);
+        if (!profile) {
+          res.status(404).json({ error: 'User not found' });
+          return;
+        }
+        res.json({
+          hasSeenAbout: profile.hasSeenAbout,
+        });
+      } catch (error) {
+        console.error('[User] Get profile error:', error);
+        res.status(500).json({ error: 'Failed to get profile' });
+      }
+      return;
+    }
+
+    if (path === '/api/user/mark-about-seen' && method === 'POST') {
+      try {
+        await markAboutAsSeen(userId);
+        res.json({ success: true });
+      } catch (error) {
+        console.error('[User] Mark about seen error:', error);
+        res.status(500).json({ error: 'Failed to update profile' });
+      }
+      return;
     }
 
     res.status(404).json({ error: 'Not found' });

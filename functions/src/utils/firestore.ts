@@ -277,6 +277,13 @@ export async function getAllUserIds(): Promise<string[]> {
   return snapshot.docs.map(doc => doc.id);
 }
 
+// User profile type
+export interface UserProfile {
+  email: string;
+  createdAt: Timestamp;
+  hasSeenAbout: boolean;
+}
+
 // Ensure user document exists
 export async function ensureUserExists(userId: string, email: string): Promise<void> {
   const userDoc = globalCollections.users.doc(userId);
@@ -285,8 +292,30 @@ export async function ensureUserExists(userId: string, email: string): Promise<v
     await userDoc.set({
       email,
       createdAt: toTimestamp(new Date()),
+      hasSeenAbout: false, // New users haven't seen the about page
     });
   }
+}
+
+// Get user profile
+export async function getUserProfile(userId: string): Promise<UserProfile | null> {
+  const doc = await globalCollections.users.doc(userId).get();
+  if (!doc.exists) return null;
+
+  const data = doc.data();
+  return {
+    email: data?.email || '',
+    createdAt: data?.createdAt || toTimestamp(new Date()),
+    // For existing users without this field, assume they've seen it
+    hasSeenAbout: data?.hasSeenAbout ?? true,
+  };
+}
+
+// Mark about page as seen
+export async function markAboutAsSeen(userId: string): Promise<void> {
+  await globalCollections.users.doc(userId).update({
+    hasSeenAbout: true,
+  });
 }
 
 // Session insights operations

@@ -283,3 +283,18 @@ export async function resendVerification(): Promise<{ success: boolean; message:
     method: 'POST',
   });
 }
+
+// User profile API functions
+export interface UserProfileResponse {
+  hasSeenAbout: boolean;
+}
+
+export async function getUserProfile(): Promise<UserProfileResponse> {
+  return fetchAPI<UserProfileResponse>('/user/profile');
+}
+
+export async function markAboutAsSeen(): Promise<{ success: boolean }> {
+  return fetchAPI<{ success: boolean }>('/user/mark-about-seen', {
+    method: 'POST',
+  });
+}

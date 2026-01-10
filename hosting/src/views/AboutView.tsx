@@ -2,15 +2,15 @@ import { useNavigate } from 'react-router-dom';
 
 interface AboutViewProps {
   isFirstTime?: boolean;
-  onGetStarted?: () => void;
+  onGetStarted?: () => Promise<void>;
 }
 
 function AboutView({ isFirstTime = false, onGetStarted }: AboutViewProps) {
   const navigate = useNavigate();
 
-  const handleGetStarted = () => {
+  const handleGetStarted = async () => {
     if (onGetStarted) {
-      onGetStarted();
+      await onGetStarted();
     }
     navigate('/');
   };

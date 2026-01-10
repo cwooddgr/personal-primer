@@ -252,16 +252,24 @@ body {
 }
 
 /* Music Card */
-.music-link {
-  display: inline-block;
+.music-links {
   margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.music-link {
   font-family: var(--font-sans);
   font-size: 0.9rem;
   color: var(--color-accent);
 }
 
+.link-separator {
+  color: var(--color-text-muted);
+}
+
 .no-link {
-  margin-top: 1rem;
   font-size: 0.9rem;
   color: var(--color-text-muted);
   font-style: italic;

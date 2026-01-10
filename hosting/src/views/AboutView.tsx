@@ -11,7 +11,9 @@ function AboutView({ isFirstTime = false, onMarkSeen }: AboutViewProps) {
 
   // Mark as seen immediately when shown to first-time user
   useEffect(() => {
+    console.log('[AboutView] useEffect running, isFirstTime:', isFirstTime, 'onMarkSeen:', !!onMarkSeen);
     if (isFirstTime && onMarkSeen) {
+      console.log('[AboutView] Calling onMarkSeen...');
       onMarkSeen();
     }
   }, [isFirstTime, onMarkSeen]);

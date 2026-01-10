@@ -263,15 +263,15 @@ function App() {
   }, [user]);
 
   const markAboutAsSeen = useCallback(() => {
-    // Fire and forget - no need to wait
+    console.log('[App] Calling markAboutAsSeenAPI...');
     markAboutAsSeenAPI()
-      .then(() => {
+      .then((result) => {
+        console.log('[App] markAboutAsSeenAPI succeeded:', result);
         setHasSeenAbout(true);
       })
       .catch((err) => {
-        console.error('[App] Failed to mark about as seen:', err);
-        // Still update local state
-        setHasSeenAbout(true);
+        console.error('[App] markAboutAsSeenAPI failed:', err);
+        // Don't update local state on error - let them try again
       });
   }, []);
 

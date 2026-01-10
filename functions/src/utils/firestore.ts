@@ -313,9 +313,9 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
 
 // Mark about page as seen
 export async function markAboutAsSeen(userId: string): Promise<void> {
-  await globalCollections.users.doc(userId).update({
+  await globalCollections.users.doc(userId).set({
     hasSeenAbout: true,
-  });
+  }, { merge: true });
 }
 
 // Session insights operations

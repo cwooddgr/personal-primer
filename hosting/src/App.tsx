@@ -113,7 +113,7 @@ function AuthForm({ onLogin }: { onLogin: () => void }) {
 
   return (
     <div className="login-container">
-      <h1>Personal Primer</h1>
+      <h1>Primer</h1>
 
       {view === 'login' && (
         <form onSubmit={handleLogin} className="login-form">

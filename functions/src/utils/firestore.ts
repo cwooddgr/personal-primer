@@ -130,7 +130,7 @@ export async function createWelcomeArc(userId: string): Promise<Arc> {
 
   return createArc(userId, {
     theme: 'Beginnings',
-    description: 'Every journey starts somewhere. This week we explore the creative spark of first encounters—the tentative opening notes, the initial brushstroke, the words that break silence. These artifacts invite you to notice how things come into being, and perhaps to reflect on your own beginnings with Personal Primer.',
+    description: 'Every journey starts somewhere. This week we explore the creative spark of first encounters—the tentative opening notes, the initial brushstroke, the words that break silence. These artifacts invite you to notice how things come into being, and perhaps to reflect on your own beginnings with Primer.',
     shortDescription: 'Exploring the creative spark of first encounters.',
     startDate: toTimestamp(today),
     targetDurationDays: 7,

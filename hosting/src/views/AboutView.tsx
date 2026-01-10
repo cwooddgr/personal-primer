@@ -17,12 +17,12 @@ function AboutView({ isFirstTime = false, onGetStarted }: AboutViewProps) {
 
   return (
     <div className="about-view">
-      <h1>Welcome to Personal Primer</h1>
+      <h1>Welcome to Primer</h1>
 
       <section className="about-section">
         <h2>What is this?</h2>
         <p>
-          Personal Primer delivers one thoughtful intellectual encounter each day.
+          Primer delivers one thoughtful intellectual encounter each day.
           Rather than overwhelming you with content, it offers a single, curated
           moment of engagement with ideas, art, and music.
         </p>
@@ -73,7 +73,7 @@ function AboutView({ isFirstTime = false, onGetStarted }: AboutViewProps) {
       <section className="about-section">
         <h2>The Philosophy</h2>
         <p>
-          Personal Primer is built on the idea of <em>formation over education</em>.
+          Primer is built on the idea of <em>formation over education</em>.
           It's not about accumulating facts or completing courses. It's about
           developing the habit of thoughtful engagement with ideas—one day at a time.
         </p>

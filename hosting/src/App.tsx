@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, User, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import TodayView from './views/TodayView';
@@ -265,11 +266,16 @@ function App() {
   const markAboutAsSeen = async () => {
     try {
       await markAboutAsSeenAPI();
-      setHasSeenAbout(true);
+      // Use flushSync to ensure state updates before navigation
+      flushSync(() => {
+        setHasSeenAbout(true);
+      });
     } catch (err) {
       console.error('[App] Failed to mark about as seen:', err);
       // Still update local state to allow navigation
-      setHasSeenAbout(true);
+      flushSync(() => {
+        setHasSeenAbout(true);
+      });
     }
   };
 

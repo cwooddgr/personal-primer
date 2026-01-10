@@ -12,10 +12,52 @@ import {
   getRecentInsights,
   toTimestamp,
 } from '../utils/firestore';
-import { chat, ChatMessage, estimateMessagesTokens } from './anthropic';
+import { chat, ChatMessage, estimateMessagesTokens, quickCheck } from './anthropic';
 import { calculateDayInArc } from '../utils/firestore';
 
 const MAX_CONTEXT_TOKENS = 50000;
+
+const INCOMPLETE_MESSAGE_PROMPT = "It looks like your message may have been cut off. Would you like to continue your thought, or is that complete?";
+
+const INCOMPLETE_CHECK_SYSTEM = `You are analyzing whether a user's message appears to have been accidentally submitted before they finished typing.
+
+Look for signs like:
+- Sentence stops mid-thought (ends with connecting words like "and", "but", "because", "the", etc.)
+- Ends with a comma suggesting more was coming
+- Unclosed parentheses, brackets, or quotes
+- Numbered or bulleted list that seems incomplete
+- Ends with a colon suggesting explanation/list to follow
+- Generally reads as if the person hit Enter by accident
+
+However, these are COMPLETE and should NOT be flagged:
+- Short acknowledgments ("yes", "ok", "thanks", "I see")
+- Complete questions or statements, even if brief
+- Ellipsis used intentionally for effect ("I wonder...")
+- Natural conversation endings
+
+Respond with ONLY "incomplete" or "complete" - nothing else.`;
+
+/**
+ * Uses the LLM to detect if a message appears to have been accidentally submitted mid-thought.
+ */
+async function detectIncompleteMessage(message: string): Promise<boolean> {
+  // Very short messages are almost always complete (greetings, yes/no, etc.)
+  if (message.trim().length < 10) {
+    return false;
+  }
+
+  try {
+    const result = await quickCheck(
+      INCOMPLETE_CHECK_SYSTEM,
+      `User message: "${message}"`,
+    );
+    return result.trim().toLowerCase() === 'incomplete';
+  } catch (error) {
+    // If the check fails, assume message is complete and proceed normally
+    console.error('Incomplete message check failed:', error);
+    return false;
+  }
+}
 
 function buildConversationSystemPrompt(
   bundle: DailyBundle,
@@ -141,11 +183,9 @@ export async function handleMessage(
   userMessage: string,
   bundle: DailyBundle,
   arc: Arc
-): Promise<{ response: string; conversation: Conversation; sessionShouldEnd: boolean }> {
+): Promise<{ response: string; conversation: Conversation; sessionShouldEnd: boolean; incompleteMessageDetected?: boolean }> {
   const bundleId = bundle.id;
   const now = toTimestamp(new Date());
-  const dayInArc = await calculateDayInArc(userId, arc);
-  const insights = await getRecentInsights(userId, 14);
 
   // Get or create conversation
   let conversation = await getConversation(userId, bundleId);
@@ -160,6 +200,21 @@ export async function handleMessage(
     };
     await createConversation(userId, conversation);
   }
+
+  // Check if message looks incomplete before processing
+  const isIncomplete = await detectIncompleteMessage(userMessage);
+  if (isIncomplete) {
+    console.log('Incomplete message detected:', userMessage);
+    return {
+      response: INCOMPLETE_MESSAGE_PROMPT,
+      conversation,
+      sessionShouldEnd: false,
+      incompleteMessageDetected: true,
+    };
+  }
+
+  const dayInArc = await calculateDayInArc(userId, arc);
+  const insights = await getRecentInsights(userId, 14);
 
   // Build message history for LLM
   const chatMessages: ChatMessage[] = conversation.messages.map(m => ({

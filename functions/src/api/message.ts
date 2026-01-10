@@ -44,12 +44,13 @@ export async function handlePostMessage(req: Request, res: Response, userId: str
       return;
     }
 
-    const { response, conversation, sessionShouldEnd } = await handleMessage(userId, message, bundle, arc);
+    const { response, conversation, sessionShouldEnd, incompleteMessageDetected } = await handleMessage(userId, message, bundle, arc);
 
     const result: MessageResponse = {
       response,
       conversation,
       sessionShouldEnd,
+      incompleteMessageDetected,
     };
 
     res.json(result);

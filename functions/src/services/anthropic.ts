@@ -70,6 +70,32 @@ export async function generateJSON<T>(
   return JSON.parse(jsonStr) as T;
 }
 
+/**
+ * Quick check using Haiku for fast, cheap yes/no style questions.
+ * Returns the raw text response.
+ */
+export async function quickCheck(
+  systemPrompt: string,
+  userPrompt: string,
+  maxTokens: number = 256
+): Promise<string> {
+  const anthropic = getClient();
+
+  const response = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20250514',
+    max_tokens: maxTokens,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: userPrompt }],
+  });
+
+  const textBlock = response.content.find(block => block.type === 'text');
+  if (!textBlock || textBlock.type !== 'text') {
+    throw new Error('No text response from Claude');
+  }
+
+  return textBlock.text;
+}
+
 // Token estimation (rough approximation)
 export function estimateTokens(text: string): number {
   // Rough estimate: ~4 characters per token

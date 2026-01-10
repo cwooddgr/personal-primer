@@ -27,6 +27,7 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
   const [arcCompletion, setArcCompletion] = useState<ArcCompletionData | undefined>();
   const [refiningArc, setRefiningArc] = useState(false);
   const [refinementMessages, setRefinementMessages] = useState<ArcRefinementMessage[]>([]);
+  const [incompletePrompt, setIncompletePrompt] = useState<string | null>(null);
 
   const handleSend = async () => {
     if (!input.trim() || sending || sessionEnded) {
@@ -38,6 +39,7 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
     console.log('[ChatInterface] Sending message:', userMessage.substring(0, 50) + (userMessage.length > 50 ? '...' : ''));
     setInput('');
     setSending(true);
+    setIncompletePrompt(null);
 
     // Optimistically add user message
     setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
@@ -47,7 +49,22 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
       console.log('[ChatInterface] Message response:', {
         messageCount: response.conversation.messages.length,
         sessionShouldEnd: response.sessionShouldEnd,
+        incompleteMessageDetected: response.incompleteMessageDetected,
       });
+
+      // Handle incomplete message detection
+      if (response.incompleteMessageDetected) {
+        console.log('[ChatInterface] Incomplete message detected, restoring input');
+        // Remove the optimistic message
+        setMessages((prev) => prev.slice(0, -1));
+        // Restore the text to the input field
+        setInput(userMessage);
+        // Show the prompt
+        setIncompletePrompt(response.response);
+        setSending(false);
+        return;
+      }
+
       setMessages(response.conversation.messages);
 
       // Auto-end session if Claude detected user wants to end
@@ -286,28 +303,35 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
           <p className="ending-message">Ending session...</p>
         </div>
       ) : (
-        <div className="chat-input-area">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type your message..."
-            disabled={sending}
-            rows={2}
-          />
-          <div className="chat-actions">
-            <button onClick={handleSend} disabled={!input.trim() || sending}>
-              Send
-            </button>
-            <button
-              onClick={handleEndSession}
-              disabled={messages.length === 0}
-              className="end-session"
-            >
-              End Session
-            </button>
+        <>
+          {incompletePrompt && (
+            <div className="incomplete-prompt">
+              <p>{incompletePrompt}</p>
+            </div>
+          )}
+          <div className="chat-input-area">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type your message..."
+              disabled={sending}
+              rows={2}
+            />
+            <div className="chat-actions">
+              <button onClick={handleSend} disabled={!input.trim() || sending}>
+                Send
+              </button>
+              <button
+                onClick={handleEndSession}
+                disabled={messages.length === 0}
+                className="end-session"
+              >
+                End Session
+              </button>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </section>
   );

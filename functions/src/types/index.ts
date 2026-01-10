@@ -149,6 +149,7 @@ export interface MessageResponse {
   response: string;
   conversation: Conversation;
   sessionShouldEnd?: boolean;
+  incompleteMessageDetected?: boolean;
 }
 
 export interface ReactRequest {

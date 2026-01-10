@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, User, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import TodayView from './views/TodayView';
@@ -222,58 +222,46 @@ function AuthForm({ onLogin }: { onLogin: () => void }) {
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [hasSeenAbout, setHasSeenAbout] = useState<boolean | null>(null);
-  const [profileLoading, setProfileLoading] = useState(false);
+  const [showAboutFirst, setShowAboutFirst] = useState(false);
+  const [profileChecked, setProfileChecked] = useState(false);
 
   useEffect(() => {
-    console.log('[App] Setting up auth state listener...');
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log('[App] Auth state changed:', user ? { uid: user.uid, email: user.email } : 'signed out');
       setUser(user);
       setLoading(false);
-      // Reset profile state when user changes
       if (!user) {
-        setHasSeenAbout(null);
+        setShowAboutFirst(false);
+        setProfileChecked(false);
       }
     });
-
     return () => unsubscribe();
   }, []);
 
-  // Fetch user profile when user is authenticated
+  // Check profile once when user signs in
   useEffect(() => {
-    async function fetchProfile() {
-      if (!user) return;
+    async function checkProfile() {
+      if (!user || profileChecked) return;
 
-      setProfileLoading(true);
       try {
         const profile = await getUserProfile();
-        console.log('[App] User profile loaded:', profile);
-        setHasSeenAbout(profile.hasSeenAbout);
+        if (!profile.hasSeenAbout) {
+          // First time user - show about page and mark as seen
+          setShowAboutFirst(true);
+          await markAboutAsSeenAPI();
+        }
       } catch (err) {
-        console.error('[App] Failed to load profile:', err);
-        // On error, assume they've seen it to avoid blocking access
-        setHasSeenAbout(true);
+        console.error('[App] Failed to check profile:', err);
       } finally {
-        setProfileLoading(false);
+        setProfileChecked(true);
       }
     }
 
-    fetchProfile();
-  }, [user]);
+    checkProfile();
+  }, [user, profileChecked]);
 
-  const markAboutAsSeen = useCallback(() => {
-    console.log('[App] Calling markAboutAsSeenAPI...');
-    markAboutAsSeenAPI()
-      .then((result) => {
-        console.log('[App] markAboutAsSeenAPI succeeded:', result);
-        setHasSeenAbout(true);
-      })
-      .catch((err) => {
-        console.error('[App] markAboutAsSeenAPI failed:', err);
-        // Don't update local state on error - let them try again
-      });
-  }, []);
+  const handleGetStarted = () => {
+    setShowAboutFirst(false);
+  };
 
   const handleLogout = async () => {
     try {
@@ -292,9 +280,20 @@ function App() {
     return <AuthForm onLogin={() => {}} />;
   }
 
-  // Wait for profile to load before showing the app
-  if (profileLoading || hasSeenAbout === null) {
+  // Wait for profile check before showing the app
+  if (!profileChecked) {
     return <div className="loading">Loading...</div>;
+  }
+
+  // First time user - show About page before anything else
+  if (showAboutFirst) {
+    return (
+      <div className="app">
+        <main className="main">
+          <AboutView isFirstTime={true} onGetStarted={handleGetStarted} />
+        </main>
+      </div>
+    );
   }
 
   return (
@@ -315,28 +314,11 @@ function App() {
 
       <main className="main">
         <Routes>
-          <Route
-            path="/"
-            element={
-              hasSeenAbout ? (
-                <TodayView />
-              ) : (
-                <Navigate to="/about" replace />
-              )
-            }
-          />
+          <Route path="/" element={<TodayView />} />
           <Route path="/arc" element={<ArcView />} />
           <Route path="/history" element={<HistoryView />} />
           <Route path="/history/:date/conversation" element={<ConversationHistoryView />} />
-          <Route
-            path="/about"
-            element={
-              <AboutView
-                isFirstTime={!hasSeenAbout}
-                onMarkSeen={markAboutAsSeen}
-              />
-            }
-          />
+          <Route path="/about" element={<AboutView />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

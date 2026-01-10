@@ -1,25 +1,13 @@
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-
 interface AboutViewProps {
   isFirstTime?: boolean;
-  onMarkSeen?: () => void;
+  onGetStarted?: () => void;
 }
 
-function AboutView({ isFirstTime = false, onMarkSeen }: AboutViewProps) {
-  const navigate = useNavigate();
-
-  // Mark as seen immediately when shown to first-time user
-  useEffect(() => {
-    console.log('[AboutView] useEffect running, isFirstTime:', isFirstTime, 'onMarkSeen:', !!onMarkSeen);
-    if (isFirstTime && onMarkSeen) {
-      console.log('[AboutView] Calling onMarkSeen...');
-      onMarkSeen();
-    }
-  }, [isFirstTime, onMarkSeen]);
-
+function AboutView({ isFirstTime = false, onGetStarted }: AboutViewProps) {
   const handleGetStarted = () => {
-    navigate('/');
+    if (onGetStarted) {
+      onGetStarted();
+    }
   };
 
   return (

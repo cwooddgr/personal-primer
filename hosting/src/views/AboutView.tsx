@@ -57,10 +57,20 @@ function AboutView({ isFirstTime = false, onGetStarted }: AboutViewProps) {
         <div className="about-subsection">
           <h3>Conversation</h3>
           <p>
-            After exploring the day's artifacts, you're invited to engage in
-            conversation. This isn't a quiz or a lecture—it's a dialogue with a
-            curious companion who can help you think through what you've encountered,
-            make connections, and explore your own responses.
+            This is where the magic happens. After exploring the day's artifacts,
+            you're invited to engage in conversation—and this is really why we
+            built Primer.
+          </p>
+          <p>
+            It's not a quiz or a lecture. It's a dialogue with a curious companion
+            who can help you think through what you've encountered, make unexpected
+            connections, and discover what these ideas mean to you. The artifacts
+            are just the starting point; the conversation is where real insight
+            emerges.
+          </p>
+          <p>
+            We hope you'll take a few minutes each day to share your thoughts,
+            questions, and reactions. That's where Primer comes alive.
           </p>
         </div>
       </section>

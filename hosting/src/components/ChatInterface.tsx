@@ -9,13 +9,6 @@ interface ChatInterfaceProps {
 }
 
 function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded, initialSuggestedReading }: ChatInterfaceProps) {
-  console.log('[ChatInterface] Init:', {
-    hasConversation: !!initialConversation,
-    messageCount: initialConversation?.messages.length ?? 0,
-    sessionEnded: initialSessionEnded,
-    hasSuggestedReading: !!initialSuggestedReading,
-  });
-
   const [messages, setMessages] = useState<ConversationMessage[]>(
     initialConversation?.messages || []
   );

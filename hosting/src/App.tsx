@@ -1,6 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
-import { flushSync } from 'react-dom';
+import { useEffect, useState, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, User, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import TodayView from './views/TodayView';
@@ -263,21 +262,18 @@ function App() {
     fetchProfile();
   }, [user]);
 
-  const markAboutAsSeen = async () => {
-    try {
-      await markAboutAsSeenAPI();
-      // Use flushSync to ensure state updates before navigation
-      flushSync(() => {
+  const markAboutAsSeen = useCallback(() => {
+    // Fire and forget - no need to wait
+    markAboutAsSeenAPI()
+      .then(() => {
+        setHasSeenAbout(true);
+      })
+      .catch((err) => {
+        console.error('[App] Failed to mark about as seen:', err);
+        // Still update local state
         setHasSeenAbout(true);
       });
-    } catch (err) {
-      console.error('[App] Failed to mark about as seen:', err);
-      // Still update local state to allow navigation
-      flushSync(() => {
-        setHasSeenAbout(true);
-      });
-    }
-  };
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -337,7 +333,7 @@ function App() {
             element={
               <AboutView
                 isFirstTime={!hasSeenAbout}
-                onGetStarted={markAboutAsSeen}
+                onMarkSeen={markAboutAsSeen}
               />
             }
           />

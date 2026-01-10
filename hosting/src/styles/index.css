@@ -418,6 +418,26 @@ body {
   line-height: 1.5;
 }
 
+.incomplete-prompt .complete-link {
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  text-decoration: underline;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  padding: 0;
+}
+
+.incomplete-prompt .complete-link:hover {
+  color: var(--color-accent-hover);
+}
+
+.incomplete-prompt .complete-link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .chat-input-area textarea {
   width: 100%;
   min-height: 8rem;

@@ -28,24 +28,29 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
   const [refiningArc, setRefiningArc] = useState(false);
   const [refinementMessages, setRefinementMessages] = useState<ArcRefinementMessage[]>([]);
   const [incompletePrompt, setIncompletePrompt] = useState<string | null>(null);
+  const [pendingIncompleteMessage, setPendingIncompleteMessage] = useState<string | null>(null);
 
-  const handleSend = async () => {
+  const handleSend = async (forceComplete = false) => {
     if (!input.trim() || sending || sessionEnded) {
       console.log('[ChatInterface] handleSend blocked:', { empty: !input.trim(), sending, sessionEnded });
       return;
     }
 
     const userMessage = input.trim();
-    console.log('[ChatInterface] Sending message:', userMessage.substring(0, 50) + (userMessage.length > 50 ? '...' : ''));
+    // If we're resending while incomplete prompt is showing, force complete
+    const shouldForceComplete = forceComplete || (incompletePrompt !== null && pendingIncompleteMessage !== null);
+
+    console.log('[ChatInterface] Sending message:', userMessage.substring(0, 50) + (userMessage.length > 50 ? '...' : ''), { forceComplete: shouldForceComplete });
     setInput('');
     setSending(true);
     setIncompletePrompt(null);
+    setPendingIncompleteMessage(null);
 
     // Optimistically add user message
     setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
 
     try {
-      const response = await sendMessage(userMessage);
+      const response = await sendMessage(userMessage, shouldForceComplete);
       console.log('[ChatInterface] Message response:', {
         messageCount: response.conversation.messages.length,
         sessionShouldEnd: response.sessionShouldEnd,
@@ -59,7 +64,8 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
         setMessages((prev) => prev.slice(0, -1));
         // Restore the text to the input field
         setInput(userMessage);
-        // Show the prompt
+        // Store the pending message and show the prompt
+        setPendingIncompleteMessage(userMessage);
         setIncompletePrompt(response.response);
         setSending(false);
         return;
@@ -306,7 +312,18 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
         <>
           {incompletePrompt && (
             <div className="incomplete-prompt">
-              <p>{incompletePrompt}</p>
+              <p>
+                It looks like your message may have been cut off. Continue typing, or click{' '}
+                <button
+                  type="button"
+                  className="complete-link"
+                  onClick={() => handleSend(true)}
+                  disabled={sending}
+                >
+                  send as-is
+                </button>
+                {' '}if that was complete.
+              </p>
             </div>
           )}
           <div className="chat-input-area">
@@ -319,7 +336,7 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
               rows={2}
             />
             <div className="chat-actions">
-              <button onClick={handleSend} disabled={!input.trim() || sending}>
+              <button onClick={() => handleSend()} disabled={!input.trim() || sending}>
                 Send
               </button>
               <button

@@ -138,11 +138,11 @@ export async function getToday(): Promise<TodayResponse> {
   return fetchAPI<TodayResponse>(`/today?date=${localDate}`);
 }
 
-export async function sendMessage(message: string): Promise<MessageResponse> {
+export async function sendMessage(message: string, forceComplete?: boolean): Promise<MessageResponse> {
   const localDate = getLocalDate();
   return fetchAPI<MessageResponse>('/today/message', {
     method: 'POST',
-    body: JSON.stringify({ message, date: localDate }),
+    body: JSON.stringify({ message, date: localDate, forceComplete }),
   });
 }
 

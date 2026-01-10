@@ -143,6 +143,7 @@ export interface TodayResponse {
 export interface MessageRequest {
   message: string;
   date: string;
+  forceComplete?: boolean;
 }
 
 export interface MessageResponse {

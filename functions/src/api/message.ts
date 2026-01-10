@@ -18,7 +18,7 @@ function getErrorMessage(error: unknown): string {
 
 export async function handlePostMessage(req: Request, res: Response, userId: string): Promise<void> {
   try {
-    const { message, date } = req.body as MessageRequest;
+    const { message, date, forceComplete } = req.body as MessageRequest;
 
     if (!message || typeof message !== 'string') {
       res.status(400).json({ error: 'Message is required' });
@@ -44,7 +44,7 @@ export async function handlePostMessage(req: Request, res: Response, userId: str
       return;
     }
 
-    const { response, conversation, sessionShouldEnd, incompleteMessageDetected } = await handleMessage(userId, message, bundle, arc);
+    const { response, conversation, sessionShouldEnd, incompleteMessageDetected } = await handleMessage(userId, message, bundle, arc, forceComplete);
 
     const result: MessageResponse = {
       response,

@@ -182,7 +182,8 @@ export async function handleMessage(
   userId: string,
   userMessage: string,
   bundle: DailyBundle,
-  arc: Arc
+  arc: Arc,
+  forceComplete?: boolean
 ): Promise<{ response: string; conversation: Conversation; sessionShouldEnd: boolean; incompleteMessageDetected?: boolean }> {
   const bundleId = bundle.id;
   const now = toTimestamp(new Date());
@@ -201,16 +202,18 @@ export async function handleMessage(
     await createConversation(userId, conversation);
   }
 
-  // Check if message looks incomplete before processing
-  const isIncomplete = await detectIncompleteMessage(userMessage);
-  if (isIncomplete) {
-    console.log('Incomplete message detected:', userMessage);
-    return {
-      response: INCOMPLETE_MESSAGE_PROMPT,
-      conversation,
-      sessionShouldEnd: false,
-      incompleteMessageDetected: true,
-    };
+  // Check if message looks incomplete before processing (skip if user forced complete)
+  if (!forceComplete) {
+    const isIncomplete = await detectIncompleteMessage(userMessage);
+    if (isIncomplete) {
+      console.log('Incomplete message detected:', userMessage);
+      return {
+        response: INCOMPLETE_MESSAGE_PROMPT,
+        conversation,
+        sessionShouldEnd: false,
+        incompleteMessageDetected: true,
+      };
+    }
   }
 
   const dayInArc = await calculateDayInArc(userId, arc);

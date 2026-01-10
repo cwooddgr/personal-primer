@@ -242,12 +242,20 @@ function App() {
     async function checkProfile() {
       if (!user || profileChecked) return;
 
+      console.log('[App] Checking profile for user:', user.uid);
       try {
         const profile = await getUserProfile();
+        console.log('[App] Profile response:', profile);
+        console.log('[App] hasSeenAbout value:', profile.hasSeenAbout, 'type:', typeof profile.hasSeenAbout);
+
         if (!profile.hasSeenAbout) {
-          // First time user - show about page and mark as seen
+          console.log('[App] First time user - showing about page');
           setShowAboutFirst(true);
-          await markAboutAsSeenAPI();
+          console.log('[App] Calling markAboutAsSeenAPI...');
+          const result = await markAboutAsSeenAPI();
+          console.log('[App] markAboutAsSeenAPI result:', result);
+        } else {
+          console.log('[App] User has already seen about page');
         }
       } catch (err) {
         console.error('[App] Failed to check profile:', err);

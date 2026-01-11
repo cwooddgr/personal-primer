@@ -44,7 +44,7 @@ Sessions end via explicit action, natural conversation endings, or 1-hour inacti
 - **Database**: Firebase Firestore
 - **LLM**: Anthropic Claude API (claude-opus-4-5-20251101)
 - **Link Resolution**: Google Custom Search API
-- **Auth**: Firebase Auth (single user)
+- **Auth**: Firebase Auth (multi-user with email whitelist)
 
 ## Setup
 

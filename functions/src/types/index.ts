@@ -116,7 +116,7 @@ export interface LLMBundleSelection {
     source: string;
     author: string;
   };
-  framingText: string;
+  // Note: framingText is generated separately after artifacts are validated
 }
 
 export interface LLMInsightsExtraction {

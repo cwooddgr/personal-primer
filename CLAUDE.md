@@ -86,19 +86,28 @@ All endpoints require authentication (except `/api/auth/*`):
 - `GET /api/history/:date/conversation` - Get conversation history for a specific date
 - `POST /api/arc/refine/message` - Refine next arc theme via conversation
 
-### Bundle Generation Flow
+### Bundle Generation Flow (Two-Phase)
+Bundle generation uses a two-phase approach to ensure framing text always matches the displayed artifacts:
+
+**Phase 1: Artifact Selection & Validation**
 1. Gather context (arc, recent exposures, insights, recent creators)
 2. Calculate day in arc (bundle count + 1, since generating a new bundle) and phase (early/middle/late)
-3. LLM selects artifacts with search queries (prompt includes explicit coherence rules)
+3. LLM selects artifacts with search queries (no framing text yet)
 4. **Coherence validation:** Second LLM call checks for cross-reference mismatches
    - If text mentions artist X, image must be by artist X
-   - If coherence issues found, replacement artifacts are requested
-5. On final day of arc, special framing instructions prompt closure
-6. Resolve and validate links with retry logic:
+   - If coherence issues found, replacement artifacts are requested (with exposure awareness)
+5. Resolve and validate links with retry logic:
    - **Music:** Up to 5 retries with iTunes API, classical-aware search (see below)
-   - **Image:** Up to 3 retries with Wikimedia Commons API, uses LLM-provided `searchQuery` first
-   - **Text:** Programmatic validation against recent authors (normalized name comparison), up to 3 retries if author appeared in last 14 days
-7. Persist bundle and exposure records (including creator info)
+   - **Image:** Up to 3 retries with Wikimedia Commons API + programmatic duplicate check
+   - **Text:** Programmatic validation against recent authors (normalized name comparison), up to 3 retries
+   - All alternative artifact prompts include recent exposures to prevent duplicates
+
+**Phase 2: Framing Text Generation**
+6. Once all artifacts are finalized with valid links, generate framing text via separate LLM call
+7. On final day of arc, framing includes special closure instructions
+8. Persist bundle and exposure records (including creator info)
+
+This two-phase approach ensures framing text always references the actual displayed artifacts, even when artifacts are replaced during validation or link resolution.
 
 ### Classical Music Search
 For classical music, the LLM provides additional fields: `composer`, `performer`, `isClassical`. The search strategy differs:
@@ -119,10 +128,13 @@ Images are resolved via Wikimedia Commons API with a multi-strategy search:
 The `searchQuery` parameter from the LLM is critical—it often includes specifics like "Chagall I and the Village painting 1911" that improve match accuracy.
 
 ### Artifact Coherence Validation
-After artifact selection, a second LLM call validates coherence:
+After artifact selection but BEFORE link validation, a second LLM call validates coherence:
 - **Strict checks:** If text explicitly mentions an artist (e.g., "as Chagall understood..."), the image must be by that artist
 - **Lenient checks:** General thematic connections (e.g., shared motif of dreams) are acceptable without explicit cross-references
-- When issues are detected, replacement artifacts are requested with context about the required coherence
+- When issues are detected, replacement artifacts are requested with:
+  - Context about the required coherence
+  - Recent exposures list to prevent duplicates
+- Coherence runs before link validation so any replacements go through full link validation
 
 ### Conversation Context
 System prompts include: today's artifacts, current arc info, user insights from past sessions. Guide tone is curious companion, not instructor.
@@ -162,9 +174,11 @@ The history page (`/history`) displays past bundles organized by arc:
 
 - No artifact may repeat within 14-day window (check exposures)
 - No text author may repeat within 14-day window (programmatically enforced with normalized name comparison, e.g., "T.S. Eliot" = "T. S. Eliot")
+- No image may repeat within 14-day window (programmatically enforced with normalized `title - artist` comparison)
 - For classical music, composer is stored as `creator` in exposures (not performer) to avoid same-composer repeats
-- Music/image creators are soft-avoided via LLM instructions for non-classical music
+- Music creators are soft-avoided via LLM instructions (exposures included in alternative prompts)
 - All links must be validated before delivery (HEAD request, 200 status)
+- Framing text is generated AFTER all artifacts are validated (ensures framing matches displayed artifacts)
 - Only one arc active at a time per user
 - Arc duration is bundle-count based (skipped days don't advance the arc)
 - Token limit of ~50k for conversation context

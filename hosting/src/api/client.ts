@@ -40,6 +40,26 @@ async function fetchAPI<T>(
   return data;
 }
 
+// Tone types
+export type ToneId = 'reflective' | 'guided' | 'inquiry' | 'practical' | 'direct';
+
+export interface ToneDefinition {
+  id: ToneId;
+  name: string;
+  shortName: string;
+  description: string;
+}
+
+export interface TonesResponse {
+  tones: ToneDefinition[];
+  default: ToneId;
+}
+
+export interface ToneChange {
+  messageIndex: number;
+  tone: ToneId;
+}
+
 // Types (matching backend)
 export interface Arc {
   id: string;
@@ -88,6 +108,7 @@ export interface DailyBundle {
     author: string;
   };
   framingText: string;
+  tone?: ToneId;
   suggestedReading?: SuggestedReading;
 }
 
@@ -101,6 +122,8 @@ export interface Conversation {
   bundleId: string;
   messages: ConversationMessage[];
   sessionEnded: boolean;
+  initialTone?: ToneId;
+  toneChanges?: ToneChange[];
 }
 
 export interface TodayResponse {
@@ -108,6 +131,7 @@ export interface TodayResponse {
   conversation: Conversation | null;
   arc: Arc;
   dayInArc: number;
+  currentTone: ToneId;
 }
 
 export interface MessageResponse {
@@ -288,6 +312,8 @@ export async function resendVerification(): Promise<{ success: boolean; message:
 // User profile API functions
 export interface UserProfileResponse {
   hasSeenAbout: boolean;
+  currentTone: ToneId;
+  hasSelectedTone: boolean;
 }
 
 export async function getUserProfile(): Promise<UserProfileResponse> {
@@ -297,5 +323,27 @@ export async function getUserProfile(): Promise<UserProfileResponse> {
 export async function markAboutAsSeen(): Promise<{ success: boolean }> {
   return fetchAPI<{ success: boolean }>('/user/mark-about-seen', {
     method: 'POST',
+  });
+}
+
+// Tone API functions
+export async function getTones(): Promise<TonesResponse> {
+  return fetchAPI<TonesResponse>('/tones');
+}
+
+export async function setDefaultTone(tone: ToneId): Promise<{ success: boolean; tone: ToneId }> {
+  return fetchAPI<{ success: boolean; tone: ToneId }>('/user/tone', {
+    method: 'POST',
+    body: JSON.stringify({ tone }),
+  });
+}
+
+export async function changeToneMidConversation(
+  tone: ToneId
+): Promise<{ success: boolean; tone: ToneId; messageIndex: number }> {
+  const localDate = getLocalDate();
+  return fetchAPI<{ success: boolean; tone: ToneId; messageIndex: number }>('/today/tone', {
+    method: 'POST',
+    body: JSON.stringify({ tone, date: localDate }),
   });
 }

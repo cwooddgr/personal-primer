@@ -840,6 +840,290 @@ body {
   background: var(--color-accent-hover);
 }
 
+/* Tone Selector - Full Card Grid */
+.tone-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.tone-card {
+  padding: 1.25rem;
+  background: white;
+  border: 2px solid var(--color-border);
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.tone-card:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  background: #f8f9ff;
+}
+
+.tone-card.selected {
+  border-color: var(--color-accent);
+  background: #f0f4ff;
+}
+
+.tone-card:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.tone-card-name {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.tone-card-short {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  color: var(--color-accent);
+  margin-bottom: 0.5rem;
+}
+
+.tone-card-description {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+/* Tone Selector - Compact Dropdown */
+.tone-selector-compact {
+  position: relative;
+}
+
+.tone-current {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.6rem;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.tone-current:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+.tone-current:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.tone-chevron {
+  font-size: 0.65rem;
+}
+
+.tone-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.25rem;
+  min-width: 180px;
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.tone-option {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  font-family: var(--font-sans);
+  text-align: left;
+  background: white;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.tone-option:hover {
+  background: #f5f5f5;
+}
+
+.tone-option.selected {
+  background: #f0f4ff;
+}
+
+.tone-option .tone-name {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.tone-option .tone-subtitle {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-top: 0.1rem;
+}
+
+/* Chat Header - with tone selector */
+.chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.chat-header h2 {
+  font-size: 1rem;
+  font-family: var(--font-sans);
+  color: var(--color-text-muted);
+  margin-bottom: 0;
+}
+
+/* Tone label (read-only views) */
+.tone-label {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  color: var(--color-accent);
+  padding: 0.25rem 0.5rem;
+  background: #f0f4ff;
+  border-radius: 4px;
+}
+
+/* Tone Change Marker (divider) */
+.tone-change-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 1rem 0;
+  gap: 0.75rem;
+}
+
+.tone-change-marker::before,
+.tone-change-marker::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.tone-change-marker span {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+/* Tone Selection View (Onboarding) */
+.tone-selection-view {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.tone-selection-view h1 {
+  font-size: 1.75rem;
+  margin-bottom: 1rem;
+}
+
+.tone-intro {
+  color: var(--color-text-muted);
+  max-width: 480px;
+  margin: 0 auto 1.5rem;
+}
+
+.continue-button {
+  margin-top: 1.5rem;
+  padding: 0.85rem 2rem;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  background: var(--color-accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.continue-button:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
+.continue-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Preferences View */
+.preferences-view {
+  padding: 2rem 0;
+}
+
+.preferences-view h1 {
+  margin-bottom: 2rem;
+}
+
+.preferences-section {
+  margin-bottom: 2.5rem;
+}
+
+.preferences-section h2 {
+  font-size: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.preferences-description {
+  color: var(--color-text-muted);
+  margin-bottom: 1rem;
+}
+
+.back-button {
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 1.5rem;
+}
+
+.back-button:hover {
+  color: var(--color-text);
+}
+
+.success-message {
+  color: #16a34a;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+/* Nav link-button in nav-right */
+.nav-right .link-button {
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.nav-right .link-button:hover {
+  color: var(--color-text);
+}
+
 /* Responsive */
 @media (max-width: 600px) {
   body {
@@ -860,5 +1144,13 @@ body {
 
   .message.assistant {
     margin-right: 1rem;
+  }
+
+  .tone-selector {
+    gap: 0.75rem;
+  }
+
+  .tone-card {
+    padding: 1rem;
   }
 }

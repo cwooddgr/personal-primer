@@ -14,7 +14,16 @@ import { handleRefineArcMessage } from './api/refineArc';
 import { handleRegister, handleForgotPassword, handleResendVerification } from './api/auth';
 import { checkInactiveSessions } from './scheduled/inactivityCheck';
 import { verifyAuth } from './middleware/auth';
-import { ensureUserExists, getUserProfile, markAboutAsSeen } from './utils/firestore';
+import {
+  ensureUserExists,
+  getUserProfile,
+  markAboutAsSeen,
+  setUserTone,
+  getConversation,
+  recordToneChange,
+  validateDateId,
+} from './utils/firestore';
+import { getAllTones, isValidTone, DEFAULT_TONE, ToneId } from './tones';
 
 // Set global options
 setGlobalOptions({
@@ -102,6 +111,8 @@ export const api = onRequest(
         }
         res.json({
           hasSeenAbout: profile.hasSeenAbout,
+          currentTone: profile.currentTone || DEFAULT_TONE,
+          hasSelectedTone: profile.hasSelectedTone || false,
         });
       } catch (error) {
         console.error('[User] Get profile error:', error);
@@ -117,6 +128,59 @@ export const api = onRequest(
       } catch (error) {
         console.error('[User] Mark about seen error:', error);
         res.status(500).json({ error: 'Failed to update profile' });
+      }
+      return;
+    }
+
+    // Tone endpoints
+    if (path === '/api/tones' && method === 'GET') {
+      const tones = getAllTones().map(t => ({
+        id: t.id,
+        name: t.name,
+        shortName: t.shortName,
+        description: t.description,
+      }));
+      res.json({ tones, default: DEFAULT_TONE });
+      return;
+    }
+
+    if (path === '/api/user/tone' && method === 'POST') {
+      try {
+        const { tone } = req.body as { tone?: string };
+        if (!tone || !isValidTone(tone)) {
+          res.status(400).json({ error: 'Invalid tone' });
+          return;
+        }
+        await setUserTone(userId, tone as ToneId);
+        res.json({ success: true, tone });
+      } catch (error) {
+        console.error('[User] Set tone error:', error);
+        res.status(500).json({ error: 'Failed to set tone' });
+      }
+      return;
+    }
+
+    if (path === '/api/today/tone' && method === 'POST') {
+      try {
+        const { tone, date } = req.body as { tone?: string; date?: string };
+        if (!tone || !isValidTone(tone)) {
+          res.status(400).json({ error: 'Invalid tone' });
+          return;
+        }
+        const bundleId = validateDateId(date);
+        const conversation = await getConversation(userId, bundleId);
+
+        // Record the tone change at the current message count
+        const messageIndex = conversation?.messages.length || 0;
+        await recordToneChange(userId, bundleId, tone as ToneId, messageIndex);
+
+        // Also update user's default tone for future conversations
+        await setUserTone(userId, tone as ToneId);
+
+        res.json({ success: true, tone, messageIndex });
+      } catch (error) {
+        console.error('[Tone] Change error:', error);
+        res.status(500).json({ error: 'Failed to change tone' });
       }
       return;
     }

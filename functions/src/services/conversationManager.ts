@@ -14,6 +14,7 @@ import {
 } from '../utils/firestore';
 import { chat, ChatMessage, estimateMessagesTokens, quickCheck } from './anthropic';
 import { calculateDayInArc } from '../utils/firestore';
+import { ToneId, getToneDefinition } from '../tones';
 
 const MAX_CONTEXT_TOKENS = 50000;
 
@@ -65,9 +66,11 @@ function buildConversationSystemPrompt(
   bundle: DailyBundle,
   arc: Arc,
   dayInArc: number,
-  insights: SessionInsights[]
+  insights: SessionInsights[],
+  tone: ToneId
 ): string {
   const insightsText = formatInsights(insights);
+  const toneDef = getToneDefinition(tone);
 
   return `You are the guide for Personal Primer. Today's encounter includes:
 
@@ -85,10 +88,11 @@ Day ${dayInArc} of ~${arc.targetDurationDays} (${arc.currentPhase} phase)
 WHAT YOU KNOW ABOUT THIS USER (from past conversations):
 ${insightsText || '(This is a new user, no prior insights yet)'}
 
+${toneDef.systemPromptFragment}
+
 YOUR ROLE:
 - Engage thoughtfully about today's artifacts
 - Draw connections across domains
-- Be curious, not instructive
 - Remember what has been discussed in this conversation
 - You may reference prior days' artifacts if relevant
 - Avoid over-explanation; preserve mystery and wonder
@@ -216,6 +220,7 @@ export async function handleMessage(
   userMessage: string,
   bundle: DailyBundle,
   arc: Arc,
+  tone: ToneId,
   forceComplete?: boolean
 ): Promise<{ response: string; conversation: Conversation; sessionShouldEnd: boolean; incompleteMessageDetected?: boolean }> {
   const bundleId = bundle.id;
@@ -231,6 +236,8 @@ export async function handleMessage(
       messages: [],
       lastActivity: now,
       sessionEnded: false,
+      initialTone: tone,
+      toneChanges: [],
     };
     await createConversation(userId, conversation);
   }
@@ -263,7 +270,7 @@ export async function handleMessage(
   const trimmedMessages = trimMessagesToFit(chatMessages, MAX_CONTEXT_TOKENS);
 
   // Get response from Claude
-  const systemPrompt = buildConversationSystemPrompt(bundle, arc, dayInArc, insights);
+  const systemPrompt = buildConversationSystemPrompt(bundle, arc, dayInArc, insights, tone);
   let assistantResponse = await chat(systemPrompt, trimmedMessages);
 
   // Detect if session should end (marker or pattern matching)

@@ -1,5 +1,8 @@
 import { Timestamp } from 'firebase-admin/firestore';
 
+// Re-export tone types for convenience
+export type { ToneId, ToneDefinition } from '../tones';
+
 export interface Arc {
   id: string;
   theme: string;
@@ -50,6 +53,7 @@ export interface DailyBundle {
     author: string;
   };
   framingText: string;
+  tone?: import('../tones').ToneId; // Tone used to generate framing text
   suggestedReading?: SuggestedReading;
 }
 
@@ -68,12 +72,19 @@ export interface ConversationMessage {
   timestamp: Timestamp;
 }
 
+export interface ToneChange {
+  messageIndex: number; // Index in messages array where tone change occurred
+  tone: import('../tones').ToneId;
+}
+
 export interface Conversation {
   id: string; // Same as bundle ID (YYYY-MM-DD)
   bundleId: string;
   messages: ConversationMessage[];
   lastActivity: Timestamp;
   sessionEnded: boolean;
+  initialTone?: import('../tones').ToneId; // Tone at conversation start
+  toneChanges?: ToneChange[]; // Mid-conversation tone changes
 }
 
 export interface SessionInsights {
@@ -138,6 +149,7 @@ export interface TodayResponse {
   conversation: Conversation | null;
   arc: Arc;
   dayInArc: number;
+  currentTone: import('../tones').ToneId; // User's current tone preference
 }
 
 export interface MessageRequest {

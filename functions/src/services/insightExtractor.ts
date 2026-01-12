@@ -15,6 +15,7 @@ import {
   calculateDayInArc,
   completeArc,
   toTimestamp,
+  getUserTone,
 } from '../utils/firestore';
 import { generateJSON } from './anthropic';
 import { resolveReadingUrl } from './linkValidator';
@@ -175,8 +176,11 @@ export async function extractAndEndSession(userId: string, bundleId: string, bun
     if (dayInArc >= arc.targetDurationDays) {
       console.log(`Arc "${arc.theme}" completed on day ${dayInArc}. Generating summary and next arc...`);
 
+      // Get user's tone for the arc summary
+      const tone = await getUserTone(userId);
+
       // Generate arc summary and create next arc (pass conversation so explicit theme requests are honored)
-      arcCompletion = await generateArcCompletion(userId, arc, conversation);
+      arcCompletion = await generateArcCompletion(userId, arc, conversation, tone);
 
       // Mark the current arc as completed
       await completeArc(userId, arc.id);

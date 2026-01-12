@@ -9,6 +9,7 @@ import {
   SessionInsights,
   UserReaction,
 } from '../types';
+import { ToneId, DEFAULT_TONE } from '../tones';
 
 // Initialize Firebase Admin if not already initialized
 if (!admin.apps.length) {
@@ -260,6 +261,22 @@ export async function updateConversation(
   await collections.conversations.doc(bundleId).update(updates);
 }
 
+// Record a mid-conversation tone change
+export async function recordToneChange(
+  userId: string,
+  bundleId: string,
+  tone: ToneId,
+  messageIndex: number
+): Promise<void> {
+  const conversation = await getConversation(userId, bundleId);
+  if (!conversation) return;
+
+  const toneChanges = conversation.toneChanges || [];
+  toneChanges.push({ messageIndex, tone });
+
+  await updateConversation(userId, bundleId, { toneChanges });
+}
+
 // Get stale conversations across all users (for scheduled function)
 export async function getStaleConversationsForUser(userId: string, cutoffTime: Date): Promise<Conversation[]> {
   const collections = getUserCollections(userId);
@@ -282,6 +299,8 @@ export interface UserProfile {
   email: string;
   createdAt: Timestamp;
   hasSeenAbout: boolean;
+  currentTone?: ToneId;
+  hasSelectedTone?: boolean;
 }
 
 // Ensure user document exists
@@ -308,7 +327,30 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     createdAt: data?.createdAt || toTimestamp(new Date()),
     // For existing users without this field, assume they've seen it
     hasSeenAbout: data?.hasSeenAbout ?? true,
+    currentTone: data?.currentTone,
+    hasSelectedTone: data?.hasSelectedTone ?? false,
   };
+}
+
+// Get user's current tone preference
+export async function getUserTone(userId: string): Promise<ToneId> {
+  const profile = await getUserProfile(userId);
+  return profile?.currentTone || DEFAULT_TONE;
+}
+
+// Set user's tone preference
+export async function setUserTone(userId: string, tone: ToneId): Promise<void> {
+  await globalCollections.users.doc(userId).set({
+    currentTone: tone,
+    hasSelectedTone: true,
+  }, { merge: true });
+}
+
+// Mark tone as selected (for onboarding)
+export async function markToneSelected(userId: string): Promise<void> {
+  await globalCollections.users.doc(userId).set({
+    hasSelectedTone: true,
+  }, { merge: true });
 }
 
 // Mark about page as seen

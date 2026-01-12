@@ -7,7 +7,9 @@ import HistoryView from './views/HistoryView';
 import ArcView from './views/ArcView';
 import ConversationHistoryView from './views/ConversationHistoryView';
 import AboutView from './views/AboutView';
-import { register, forgotPassword, getUserProfile, markAboutAsSeen as markAboutAsSeenAPI } from './api/client';
+import ToneSelectionView from './views/ToneSelectionView';
+import PreferencesView from './views/PreferencesView';
+import { register, forgotPassword, getUserProfile, markAboutAsSeen as markAboutAsSeenAPI, ToneId } from './api/client';
 
 // Firebase config - replace with your project's config
 const firebaseConfig = {
@@ -223,7 +225,9 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAboutFirst, setShowAboutFirst] = useState(false);
+  const [showToneSelection, setShowToneSelection] = useState(false);
   const [profileChecked, setProfileChecked] = useState(false);
+  const [showPreferences, setShowPreferences] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -231,7 +235,9 @@ function App() {
       setLoading(false);
       if (!user) {
         setShowAboutFirst(false);
+        setShowToneSelection(false);
         setProfileChecked(false);
+        setShowPreferences(false);
       }
     });
     return () => unsubscribe();
@@ -246,7 +252,11 @@ function App() {
         const profile = await getUserProfile();
         if (!profile.hasSeenAbout) {
           setShowAboutFirst(true);
+          setShowToneSelection(!profile.hasSelectedTone);
           await markAboutAsSeenAPI();
+        } else if (!profile.hasSelectedTone) {
+          // User has seen About but hasn't selected tone (existing user)
+          setShowToneSelection(true);
         }
       } catch (err) {
         console.error('[App] Failed to check profile:', err);
@@ -260,6 +270,11 @@ function App() {
 
   const handleGetStarted = () => {
     setShowAboutFirst(false);
+    // If tone selection is pending, it will show next
+  };
+
+  const handleToneSelected = (_tone: ToneId) => {
+    setShowToneSelection(false);
   };
 
   const handleLogout = async () => {
@@ -295,6 +310,28 @@ function App() {
     );
   }
 
+  // Show tone selection for users who haven't selected one
+  if (showToneSelection) {
+    return (
+      <div className="app">
+        <main className="main">
+          <ToneSelectionView onComplete={handleToneSelected} />
+        </main>
+      </div>
+    );
+  }
+
+  // Show preferences page
+  if (showPreferences) {
+    return (
+      <div className="app">
+        <main className="main">
+          <PreferencesView onBack={() => setShowPreferences(false)} />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <nav className="nav">
@@ -305,6 +342,9 @@ function App() {
         </div>
         <div className="nav-right">
           <a href="/about">About</a>
+          <button className="link-button" onClick={() => setShowPreferences(true)}>
+            Preferences
+          </button>
           <button className="logout-link" onClick={handleLogout}>
             Logout
           </button>

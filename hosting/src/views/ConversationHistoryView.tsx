@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import Markdown from 'react-markdown';
-import { getConversationHistory, ConversationHistoryResponse, ConversationMessage } from '../api/client';
+import { getConversationHistory, getTones, ConversationHistoryResponse, ConversationMessage, ToneDefinition, ToneId, ToneChange } from '../api/client';
 import MusicCard from '../components/MusicCard';
 import ImageCard from '../components/ImageCard';
 import TextCard from '../components/TextCard';
@@ -12,6 +12,7 @@ function ConversationHistoryView() {
   const [data, setData] = useState<ConversationHistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tones, setTones] = useState<ToneDefinition[]>([]);
 
   useEffect(() => {
     async function loadConversation() {
@@ -22,8 +23,12 @@ function ConversationHistoryView() {
       }
 
       try {
-        const response = await getConversationHistory(date);
-        setData(response);
+        const [historyResponse, tonesResponse] = await Promise.all([
+          getConversationHistory(date),
+          getTones(),
+        ]);
+        setData(historyResponse);
+        setTones(tonesResponse.tones);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load conversation');
       } finally {
@@ -33,6 +38,12 @@ function ConversationHistoryView() {
 
     loadConversation();
   }, [date]);
+
+  // Helper to get tone name by ID
+  const getToneName = (toneId: ToneId): string => {
+    const tone = tones.find(t => t.id === toneId);
+    return tone?.shortName || toneId;
+  };
 
   if (loading) {
     return <div className="loading">Loading...</div>;
@@ -58,6 +69,46 @@ function ConversationHistoryView() {
 
   const { conversation, bundle, arc, dayInArc } = data;
   const messages: ConversationMessage[] = conversation?.messages || [];
+  const toneChanges: ToneChange[] = conversation?.toneChanges || [];
+  const initialTone = conversation?.initialTone || bundle.tone;
+
+  // Render messages with tone change dividers
+  const renderMessagesWithDividers = () => {
+    const elements: React.ReactNode[] = [];
+
+    // Build a map of messageIndex -> tone change
+    const toneChangeMap = new Map<number, ToneId>();
+    for (const tc of toneChanges) {
+      toneChangeMap.set(tc.messageIndex, tc.tone);
+    }
+
+    for (let index = 0; index < messages.length; index++) {
+      // Check if there's a tone change before this message
+      if (toneChangeMap.has(index)) {
+        const newTone = toneChangeMap.get(index)!;
+        elements.push(
+          <div key={`tone-change-${index}`} className="tone-change-marker">
+            <span>Switched to {getToneName(newTone)}</span>
+          </div>
+        );
+      }
+
+      const msg = messages[index];
+      elements.push(
+        <div key={index} className={`message ${msg.role}`}>
+          <div className="message-content">
+            {msg.role === 'assistant' ? (
+              <Markdown>{msg.content}</Markdown>
+            ) : (
+              msg.content
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    return elements;
+  };
 
   return (
     <div className="conversation-history-view">
@@ -105,7 +156,12 @@ function ConversationHistoryView() {
       <FramingText text={bundle.framingText} />
 
       <section className="chat-interface read-only">
-        <h2>Conversation</h2>
+        <div className="chat-header">
+          <h2>Conversation</h2>
+          {initialTone && tones.length > 0 && (
+            <span className="tone-label">{getToneName(initialTone)} voice</span>
+          )}
+        </div>
 
         <p className="chat-prompt">
           Share your thoughts on today's encounter...
@@ -115,17 +171,7 @@ function ConversationHistoryView() {
           <p className="empty-state">No messages recorded.</p>
         ) : (
           <div className="messages">
-            {messages.map((msg, index) => (
-              <div key={index} className={`message ${msg.role}`}>
-                <div className="message-content">
-                  {msg.role === 'assistant' ? (
-                    <Markdown>{msg.content}</Markdown>
-                  ) : (
-                    msg.content
-                  )}
-                </div>
-              </div>
-            ))}
+            {renderMessagesWithDividers()}
           </div>
         )}
 

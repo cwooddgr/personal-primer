@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getToday, TodayResponse } from '../api/client';
+import { getToday, getTones, TodayResponse, ToneDefinition, ToneId } from '../api/client';
 import MusicCard from '../components/MusicCard';
 import ImageCard from '../components/ImageCard';
 import TextCard from '../components/TextCard';
@@ -10,20 +10,28 @@ function TodayView() {
   const [data, setData] = useState<TodayResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tones, setTones] = useState<ToneDefinition[]>([]);
+  const [currentTone, setCurrentTone] = useState<ToneId>('guided');
 
   useEffect(() => {
     async function loadToday() {
       console.log('[TodayView] Loading today data...');
       try {
-        const response = await getToday();
+        const [todayResponse, tonesResponse] = await Promise.all([
+          getToday(),
+          getTones(),
+        ]);
         console.log('[TodayView] Loaded successfully:', {
-          bundleId: response.bundle.id,
-          arcTheme: response.arc.theme,
-          hasConversation: !!response.conversation,
-          messageCount: response.conversation?.messages.length ?? 0,
-          sessionEnded: response.conversation?.sessionEnded ?? false,
+          bundleId: todayResponse.bundle.id,
+          arcTheme: todayResponse.arc.theme,
+          hasConversation: !!todayResponse.conversation,
+          messageCount: todayResponse.conversation?.messages.length ?? 0,
+          sessionEnded: todayResponse.conversation?.sessionEnded ?? false,
+          currentTone: todayResponse.currentTone,
         });
-        setData(response);
+        setData(todayResponse);
+        setTones(tonesResponse.tones);
+        setCurrentTone(todayResponse.currentTone);
       } catch (err) {
         console.error('[TodayView] Load failed:', err);
         setError(err instanceof Error ? err.message : 'Failed to load');
@@ -91,6 +99,9 @@ function TodayView() {
         initialConversation={conversation}
         sessionEnded={conversation?.sessionEnded ?? false}
         initialSuggestedReading={bundle.suggestedReading}
+        tones={tones}
+        currentTone={currentTone}
+        onToneChange={setCurrentTone}
       />
     </div>
   );

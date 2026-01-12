@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { MessageRequest, MessageResponse } from '../types';
-import { getBundle, getActiveArc, validateDateId } from '../utils/firestore';
+import { getBundle, getActiveArc, validateDateId, getUserTone, getConversation } from '../utils/firestore';
 import { handleMessage } from '../services/conversationManager';
 
 function getErrorMessage(error: unknown): string {
@@ -44,7 +44,20 @@ export async function handlePostMessage(req: Request, res: Response, userId: str
       return;
     }
 
-    const { response, conversation, sessionShouldEnd, incompleteMessageDetected } = await handleMessage(userId, message, bundle, arc, forceComplete);
+    // Determine the current tone for this conversation
+    // Check conversation's toneChanges first (most recent), then fall back to user's default
+    const existingConversation = await getConversation(userId, todayId);
+    let tone = await getUserTone(userId);
+
+    if (existingConversation?.toneChanges?.length) {
+      // Use the most recent tone change
+      tone = existingConversation.toneChanges[existingConversation.toneChanges.length - 1].tone;
+    } else if (existingConversation?.initialTone) {
+      // Use the conversation's initial tone
+      tone = existingConversation.initialTone;
+    }
+
+    const { response, conversation, sessionShouldEnd, incompleteMessageDetected } = await handleMessage(userId, message, bundle, arc, tone, forceComplete);
 
     const result: MessageResponse = {
       response,

@@ -1,14 +1,18 @@
 import { useState } from 'react';
 import Markdown from 'react-markdown';
-import { sendMessage, endSession, sendArcRefinementMessage, Conversation, ConversationMessage, SuggestedReading, ArcCompletionData, ArcRefinementMessage } from '../api/client';
+import { sendMessage, endSession, sendArcRefinementMessage, changeToneMidConversation, Conversation, ConversationMessage, SuggestedReading, ArcCompletionData, ArcRefinementMessage, ToneId, ToneDefinition, ToneChange } from '../api/client';
+import ToneSelector from './ToneSelector';
 
 interface ChatInterfaceProps {
   initialConversation: Conversation | null;
   sessionEnded: boolean;
   initialSuggestedReading?: SuggestedReading;
+  tones: ToneDefinition[];
+  currentTone: ToneId;
+  onToneChange: (tone: ToneId) => void;
 }
 
-function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded, initialSuggestedReading }: ChatInterfaceProps) {
+function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded, initialSuggestedReading, tones, currentTone, onToneChange }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<ConversationMessage[]>(
     initialConversation?.messages || []
   );
@@ -22,6 +26,36 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
   const [refinementMessages, setRefinementMessages] = useState<ArcRefinementMessage[]>([]);
   const [incompletePrompt, setIncompletePrompt] = useState<string | null>(null);
   const [pendingIncompleteMessage, setPendingIncompleteMessage] = useState<string | null>(null);
+  const [toneChanges, setToneChanges] = useState<ToneChange[]>(
+    initialConversation?.toneChanges || []
+  );
+  const [changingTone, setChangingTone] = useState(false);
+
+  const handleToneChange = async (newTone: ToneId) => {
+    if (newTone === currentTone || changingTone || sessionEnded) return;
+
+    console.log('[ChatInterface] Changing tone to:', newTone);
+    setChangingTone(true);
+
+    try {
+      const response = await changeToneMidConversation(newTone);
+      console.log('[ChatInterface] Tone changed:', response);
+
+      // Add the tone change to our list
+      setToneChanges((prev) => [...prev, { messageIndex: response.messageIndex, tone: newTone }]);
+      onToneChange(newTone);
+    } catch (error) {
+      console.error('[ChatInterface] Tone change failed:', error);
+    } finally {
+      setChangingTone(false);
+    }
+  };
+
+  // Helper to get tone name by ID
+  const getToneName = (toneId: ToneId): string => {
+    const tone = tones.find(t => t.id === toneId);
+    return tone?.shortName || toneId;
+  };
 
   const handleSend = async (forceComplete = false) => {
     if (!input.trim() || sending || sessionEnded) {
@@ -181,9 +215,58 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
     setInput('');
   };
 
+  // Render messages with tone change dividers
+  const renderMessagesWithDividers = () => {
+    const elements: React.ReactNode[] = [];
+
+    // Build a map of messageIndex -> tone change
+    const toneChangeMap = new Map<number, ToneId>();
+    for (const tc of toneChanges) {
+      toneChangeMap.set(tc.messageIndex, tc.tone);
+    }
+
+    for (let index = 0; index < messages.length; index++) {
+      // Check if there's a tone change before this message
+      if (toneChangeMap.has(index)) {
+        const newTone = toneChangeMap.get(index)!;
+        elements.push(
+          <div key={`tone-change-${index}`} className="tone-change-marker">
+            <span>Switched to {getToneName(newTone)}</span>
+          </div>
+        );
+      }
+
+      const msg = messages[index];
+      elements.push(
+        <div key={index} className={`message ${msg.role}`}>
+          <div className="message-content">
+            {msg.role === 'assistant' ? (
+              <Markdown>{msg.content}</Markdown>
+            ) : (
+              msg.content
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    return elements;
+  };
+
   return (
     <section className="chat-interface">
-      <h2>Conversation</h2>
+      <div className="chat-header">
+        <h2>Conversation</h2>
+        {tones.length > 0 && !sessionEnded && (
+          <ToneSelector
+            tones={tones}
+            currentTone={currentTone}
+            onSelect={handleToneChange}
+            disabled={changingTone || sending}
+            compact
+          />
+        )}
+      </div>
 
       {messages.length === 0 && !sessionEnded && (
         <p className="chat-prompt">
@@ -192,17 +275,7 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
       )}
 
       <div className="messages">
-        {messages.map((msg, index) => (
-          <div key={index} className={`message ${msg.role}`}>
-            <div className="message-content">
-              {msg.role === 'assistant' ? (
-                <Markdown>{msg.content}</Markdown>
-              ) : (
-                msg.content
-              )}
-            </div>
-          </div>
-        ))}
+        {renderMessagesWithDividers()}
         {sending && (
           <div className="message assistant">
             <div className="message-content typing">Thinking...</div>

@@ -332,8 +332,11 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.stopPropagation();
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                      e.preventDefault();
+                      if (input.trim() && !sending) {
+                        handleSendRefinement();
+                      }
                     }
                   }}
                   placeholder="Describe what you'd prefer..."
@@ -379,8 +382,11 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.stopPropagation();
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  if (input.trim() && !sending) {
+                    handleSend();
+                  }
                 }
               }}
               placeholder="Type your message..."

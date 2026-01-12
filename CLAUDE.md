@@ -77,14 +77,18 @@ All endpoints require authentication (except `/api/auth/*`):
 - `POST /api/auth/register` - Register new user (checks whitelist)
 - `POST /api/auth/forgot-password` - Send password reset email
 - `POST /api/auth/resend-verification` - Resend email verification
-- `GET /api/today` - Returns today's bundle (generates if needed), includes arc info and dayInArc
+- `GET /api/today` - Returns today's bundle (generates if needed), includes arc info, dayInArc, and currentTone
 - `POST /api/today/message` - Send conversation message (returns `sessionShouldEnd` flag)
 - `POST /api/today/end-session` - End session, extract insights
 - `POST /api/today/react` - Record reaction to artifact
+- `POST /api/today/tone` - Change tone mid-conversation (records change + updates default)
 - `GET /api/arc` - Get current arc
 - `GET /api/history` - Past bundles (paginated)
 - `GET /api/history/:date/conversation` - Get conversation history for a specific date
 - `POST /api/arc/refine/message` - Refine next arc theme via conversation
+- `GET /api/tones` - List all tone definitions with user's current default
+- `GET /api/user/profile` - Get user profile (includes currentTone, hasSelectedTone)
+- `POST /api/user/tone` - Set user's default tone (for new conversations)
 
 ### Bundle Generation Flow (Two-Phase)
 Bundle generation uses a two-phase approach to ensure framing text always matches the displayed artifacts:
@@ -137,7 +141,52 @@ After artifact selection but BEFORE link validation, a second LLM call validates
 - Coherence runs before link validation so any replacements go through full link validation
 
 ### Conversation Context
-System prompts include: today's artifacts, current arc info, user insights from past sessions. Guide tone is curious companion, not instructor.
+System prompts include: today's artifacts, current arc info, user insights from past sessions, and tone-specific guidance.
+
+### Tone System
+Users can customize the AI guide's communication style via five tones:
+
+| ID | Name | Style |
+|----|------|-------|
+| `reflective` | The Listener | Counselor-like, emotionally attuned |
+| `guided` | The Tutor | Personal tutor style (DEFAULT) |
+| `inquiry` | The Questioner | Socratic, question-driven |
+| `practical` | The Craft Mentor | Practitioner perspective |
+| `direct` | The Editor | No-nonsense, declarative |
+
+**Tone affects user-facing prompts only:**
+- Framing text generation
+- Conversation responses
+- Arc completion summaries
+- Arc refinement dialogs
+
+**Tone does NOT affect:**
+- Artifact selection (internal operations)
+- Coherence validation
+- Insight extraction (internal analysis)
+
+**API Endpoints:**
+- `GET /api/tones` - List all tone definitions
+- `POST /api/user/tone` - Set user's default tone (for new conversations)
+- `POST /api/today/tone` - Change tone mid-conversation (records change + updates default)
+
+**Tone Resolution for Messages** (in order of priority):
+1. Most recent `toneChange` in conversation
+2. Conversation's `initialTone` (set when first message sent)
+3. User's default tone from profile
+
+**Data Model:**
+- `UserProfile.currentTone` - User's default tone preference
+- `UserProfile.hasSelectedTone` - Whether user completed onboarding tone selection
+- `Conversation.initialTone` - Tone when conversation started
+- `Conversation.toneChanges[]` - Array of `{messageIndex, tone}` for mid-conversation changes
+- `DailyBundle.tone` - Tone used for framing text generation
+
+**Frontend Flow:**
+- New users see ToneSelectionView after AboutView during onboarding
+- Existing users without `hasSelectedTone` see tone selection on next login
+- Preferences page allows changing default tone (affects new conversations only)
+- Inline dropdown in chat allows changing tone mid-conversation
 
 ### Insight Extraction
 Triggered on explicit session end, smart session-end detection, or 1 hour inactivity. Extracts: meaningful connections, revealed interests, personal context, items to revisit, and suggested reading (with resolved URL).
@@ -189,18 +238,23 @@ The history page (`/history`) displays past bundles organized by arc:
 - `functions/src/middleware/auth.ts` - Token verification middleware
 - `functions/src/api/auth.ts` - Registration, forgot password, verification endpoints
 - `functions/src/utils/firestore.ts` - User-scoped Firestore operations (all functions take userId)
+- `functions/src/tones/index.ts` - Tone definitions, system prompt fragments, and helpers
 - `functions/src/services/bundleGenerator.ts` - Generates daily bundles via LLM (includes final day handling)
 - `functions/src/services/conversationManager.ts` - Handles chat with context and session-end detection
 - `functions/src/services/insightExtractor.ts` - Extracts insights and suggested reading from conversations
 - `functions/src/services/arcGenerator.ts` - Generates arc completion summaries and creates next arcs
 - `functions/src/api/refineArc.ts` - Handles arc refinement conversation and theme updates
+- `functions/src/api/message.ts` - Message handler with tone resolution logic
 - `functions/src/services/linkValidator.ts` - iTunes API for music, Wikimedia API for images, Google Custom Search for readings
 - `functions/src/scheduled/inactivityCheck.ts` - Scheduled function to end stale sessions across all users (every 15 min)
-- `hosting/src/App.tsx` - Main app with auth UI (login, signup, forgot password, logout)
+- `hosting/src/App.tsx` - Main app with auth UI, onboarding flow (About → Tone Selection)
 - `hosting/src/views/TodayView.tsx` - Main daily view (shows arc shortDescription in header)
+- `hosting/src/views/ToneSelectionView.tsx` - Onboarding tone selection screen
+- `hosting/src/views/PreferencesView.tsx` - User preferences (tone settings)
 - `hosting/src/views/HistoryView.tsx` - History page with bundles organized by arc
 - `hosting/src/views/ConversationHistoryView.tsx` - Read-only view of past conversations with full bundle context
-- `hosting/src/components/ChatInterface.tsx` - Conversation UI (handles suggested reading, arc completion, and arc refinement)
+- `hosting/src/components/ChatInterface.tsx` - Conversation UI (handles suggested reading, arc completion, arc refinement, and inline tone changes)
+- `hosting/src/components/ToneSelector.tsx` - Reusable tone selector (full card grid and compact dropdown modes)
 
 ## First-Time Setup
 

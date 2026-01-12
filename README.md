@@ -37,6 +37,23 @@ Each day includes an optional conversation with an AI guide who:
 
 Sessions end via explicit action, natural conversation endings, or 1-hour inactivity. Insights are extracted and inform future curation.
 
+## Guide Voice (Tone System)
+
+Users can customize how the AI guide communicates via five distinct tones:
+
+| Tone | Name | Style |
+|------|------|-------|
+| **Reflective** | The Listener | Counselor-like, emotionally attuned, creates space for processing |
+| **Guided** | The Tutor | Personal tutor style, balanced explanation with questions (default) |
+| **Inquiry** | The Questioner | Socratic method, question-driven exploration |
+| **Practical** | The Craft Mentor | Practitioner perspective, concrete and applicable |
+| **Direct** | The Editor | No-nonsense, declarative, efficient |
+
+- New users select their preferred tone during onboarding
+- Tone can be changed anytime via Preferences (affects new conversations)
+- Tone can be changed mid-conversation via inline dropdown (affects current conversation immediately)
+- Tone affects framing text, conversations, arc summaries, and arc refinement dialogs
+
 ## Tech Stack
 
 - **Frontend**: React 18 + Vite

@@ -269,6 +269,11 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.stopPropagation();
+                    }
+                  }}
                   placeholder="Describe what you'd prefer..."
                   disabled={sending}
                   rows={2}
@@ -311,6 +316,11 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.stopPropagation();
+                }
+              }}
               placeholder="Type your message..."
               disabled={sending}
               rows={2}

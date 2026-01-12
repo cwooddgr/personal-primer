@@ -126,17 +126,6 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      if (refiningArc) {
-        handleSendRefinement();
-      } else {
-        handleSend();
-      }
-    }
-  };
-
   const handleStartRefinement = () => {
     console.log('[ChatInterface] Starting arc refinement');
     setRefiningArc(true);
@@ -280,7 +269,6 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
                   placeholder="Describe what you'd prefer..."
                   disabled={sending}
                   rows={2}
@@ -323,7 +311,6 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
               placeholder="Type your message..."
               disabled={sending}
               rows={2}

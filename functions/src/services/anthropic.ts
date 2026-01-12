@@ -55,17 +55,51 @@ export async function generateJSON<T>(
     maxTokens
   );
 
-  // Extract JSON from response (handle markdown code blocks)
+  // Extract JSON from response (handle markdown code blocks and surrounding text)
   let jsonStr = response.trim();
-  if (jsonStr.startsWith('```json')) {
-    jsonStr = jsonStr.slice(7);
-  } else if (jsonStr.startsWith('```')) {
-    jsonStr = jsonStr.slice(3);
+
+  // Try to extract JSON from markdown code block first
+  const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    jsonStr = codeBlockMatch[1].trim();
+  } else {
+    // Fallback: find first { or [ and extract to matching closing bracket
+    const jsonStart = jsonStr.search(/[{\[]/);
+    if (jsonStart !== -1) {
+      jsonStr = jsonStr.slice(jsonStart);
+      // Find the matching closing bracket
+      const openChar = jsonStr[0];
+      const closeChar = openChar === '{' ? '}' : ']';
+      let depth = 0;
+      let inString = false;
+      let escaped = false;
+      for (let i = 0; i < jsonStr.length; i++) {
+        const char = jsonStr[i];
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (char === '\\' && inString) {
+          escaped = true;
+          continue;
+        }
+        if (char === '"') {
+          inString = !inString;
+          continue;
+        }
+        if (!inString) {
+          if (char === openChar) depth++;
+          if (char === closeChar) {
+            depth--;
+            if (depth === 0) {
+              jsonStr = jsonStr.slice(0, i + 1);
+              break;
+            }
+          }
+        }
+      }
+    }
   }
-  if (jsonStr.endsWith('```')) {
-    jsonStr = jsonStr.slice(0, -3);
-  }
-  jsonStr = jsonStr.trim();
 
   return JSON.parse(jsonStr) as T;
 }

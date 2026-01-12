@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { TodayResponse } from '../types';
-import { getBundle, getConversation, getActiveArc, validateDateId, calculateDayInArc, createWelcomeArc, getUserTone } from '../utils/firestore';
+import { getBundle, getConversation, getActiveArc, getArc, validateDateId, calculateDayInArc, createWelcomeArc, getUserTone } from '../utils/firestore';
 import { generateDailyBundle } from '../services/bundleGenerator';
 
 function getErrorMessage(error: unknown): string {
@@ -45,6 +45,16 @@ export async function handleGetToday(req: Request, res: Response, userId: string
 
     // Get or generate today's bundle (arc must exist first)
     let bundle = await getBundle(userId, todayId);
+
+    // If bundle exists but belongs to a different arc (e.g., after arc completion),
+    // use the bundle's arc for context so user sees correct day-in-arc
+    if (bundle && bundle.arcId !== arc.id) {
+      const bundleArc = await getArc(userId, bundle.arcId);
+      if (bundleArc) {
+        arc = bundleArc;
+      }
+    }
+
     if (!bundle) {
       bundle = await generateDailyBundle(userId, todayId, currentTone);
     }

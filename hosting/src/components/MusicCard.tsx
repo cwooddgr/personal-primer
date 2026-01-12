@@ -5,7 +5,7 @@ interface MusicCardProps {
 }
 
 function MusicCard({ title, artist, appleMusicUrl }: MusicCardProps) {
-  const youtubeSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${artist} ${title}`)}`;
+  const youtubeMusicUrl = `https://music.youtube.com/search?q=${encodeURIComponent(`${artist} ${title}`)}`;
 
   return (
     <div className="artifact-card music-card">
@@ -27,12 +27,12 @@ function MusicCard({ title, artist, appleMusicUrl }: MusicCardProps) {
         )}
         <span className="link-separator">·</span>
         <a
-          href={youtubeSearchUrl}
+          href={youtubeMusicUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="music-link"
         >
-          YouTube
+          YouTube Music
         </a>
       </div>
     </div>

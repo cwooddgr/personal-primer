@@ -255,18 +255,7 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
 
   return (
     <section className="chat-interface">
-      <div className="chat-header">
-        <h2>Conversation</h2>
-        {tones.length > 0 && !sessionEnded && (
-          <ToneSelector
-            tones={tones}
-            currentTone={currentTone}
-            onSelect={handleToneChange}
-            disabled={changingTone || sending}
-            compact
-          />
-        )}
-      </div>
+      <h2>Conversation</h2>
 
       {messages.length === 0 && !sessionEnded && (
         <p className="chat-prompt">
@@ -409,6 +398,15 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
               >
                 End Session
               </button>
+              {tones.length > 0 && (
+                <ToneSelector
+                  tones={tones}
+                  currentTone={currentTone}
+                  onSelect={handleToneChange}
+                  disabled={changingTone || sending}
+                  compact
+                />
+              )}
             </div>
           </div>
         </>

@@ -452,8 +452,13 @@ body {
 
 .chat-actions {
   display: flex;
+  align-items: center;
   gap: 0.5rem;
   margin-top: 0.5rem;
+}
+
+.chat-actions .tone-selector-compact {
+  margin-left: auto;
 }
 
 .chat-actions button {

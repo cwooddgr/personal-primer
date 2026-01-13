@@ -276,7 +276,7 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
         {renderMessagesWithDividers()}
         {sending && (
           <div className="message assistant">
-            <div className="message-content typing">Thinking...</div>
+            <div className="message-content typing">Thinking</div>
           </div>
         )}
       </div>
@@ -330,7 +330,7 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
                 ))}
                 {sending && (
                   <div className="message assistant">
-                    <div className="message-content typing">Thinking...</div>
+                    <div className="message-content typing">Thinking</div>
                   </div>
                 )}
               </div>

@@ -24,7 +24,7 @@ function ArcView() {
   }, []);
 
   if (loading) {
-    return <div className="loading">Loading arc...</div>;
+    return <div className="loading">Loading arc</div>;
   }
 
   if (error) {

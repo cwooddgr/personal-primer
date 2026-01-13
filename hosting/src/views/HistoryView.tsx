@@ -23,7 +23,7 @@ function HistoryView() {
   }, []);
 
   if (loading) {
-    return <div className="loading">Loading history...</div>;
+    return <div className="loading">Loading history</div>;
   }
 
   if (error) {

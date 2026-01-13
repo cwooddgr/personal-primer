@@ -46,7 +46,7 @@ function ConversationHistoryView() {
   };
 
   if (loading) {
-    return <div className="loading">Loading...</div>;
+    return <div className="loading">Loading</div>;
   }
 
   if (error) {

@@ -54,7 +54,7 @@ function PreferencesView({ onBack }: PreferencesViewProps) {
   if (loading) {
     return (
       <div className="preferences-view">
-        <p>Loading...</p>
+        <p className="loading">Loading</p>
       </div>
     );
   }

@@ -45,7 +45,7 @@ function ToneSelectionView({ onComplete }: ToneSelectionViewProps) {
   if (loading) {
     return (
       <div className="tone-selection-view">
-        <p>Loading...</p>
+        <p className="loading">Loading</p>
       </div>
     );
   }
@@ -72,7 +72,7 @@ function ToneSelectionView({ onComplete }: ToneSelectionViewProps) {
         onClick={handleContinue}
         disabled={saving}
       >
-        {saving ? 'Saving...' : 'Continue'}
+        {saving ? 'Saving' : 'Continue'}
       </button>
     </div>
   );

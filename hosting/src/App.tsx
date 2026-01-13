@@ -138,7 +138,7 @@ function AuthForm({ onLogin }: { onLogin: () => void }) {
           />
           {error && <p className="error">{error}</p>}
           <button type="submit" disabled={loading}>
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? 'Signing in' : 'Sign In'}
           </button>
           <div className="auth-links">
             <button type="button" className="link-button" onClick={() => switchView('signup')}>
@@ -181,7 +181,7 @@ function AuthForm({ onLogin }: { onLogin: () => void }) {
           {error && <p className="error">{error}</p>}
           {success && <p className="success">{success}</p>}
           <button type="submit" disabled={loading}>
-            {loading ? 'Creating account...' : 'Create Account'}
+            {loading ? 'Creating account' : 'Create Account'}
           </button>
           <div className="auth-links">
             <button type="button" className="link-button" onClick={() => switchView('login')}>
@@ -208,7 +208,7 @@ function AuthForm({ onLogin }: { onLogin: () => void }) {
           {error && <p className="error">{error}</p>}
           {success && <p className="success">{success}</p>}
           <button type="submit" disabled={loading}>
-            {loading ? 'Sending...' : 'Send Reset Link'}
+            {loading ? 'Sending' : 'Send Reset Link'}
           </button>
           <div className="auth-links">
             <button type="button" className="link-button" onClick={() => switchView('login')}>
@@ -287,7 +287,7 @@ function App() {
   };
 
   if (loading) {
-    return <div className="loading">Loading...</div>;
+    return <div className="loading">Loading</div>;
   }
 
   if (!user) {
@@ -296,7 +296,7 @@ function App() {
 
   // Wait for profile check before showing the app
   if (!profileChecked) {
-    return <div className="loading">Loading...</div>;
+    return <div className="loading">Loading</div>;
   }
 
   // First time user - show About page before anything else

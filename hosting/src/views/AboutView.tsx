@@ -73,6 +73,26 @@ function AboutView({ isFirstTime = false, onGetStarted }: AboutViewProps) {
             questions, and reactions. That's where Primer comes alive.
           </p>
         </div>
+
+        <div className="about-subsection">
+          <h3>Your Guide</h3>
+          <p>
+            You can choose how your guide communicates with you. Some prefer a
+            Socratic approach full of questions; others want direct, no-nonsense
+            responses. The five voices available are:
+          </p>
+          <ul>
+            <li><strong>The Tutor</strong> — Balanced explanation with gentle questions (default)</li>
+            <li><strong>The Listener</strong> — Reflective and emotionally attuned, creating space for you to process</li>
+            <li><strong>The Questioner</strong> — Socratic method, drawing out your own thinking through inquiry</li>
+            <li><strong>The Craft Mentor</strong> — Practical and concrete, focused on how ideas apply</li>
+            <li><strong>The Editor</strong> — Direct and efficient, no hand-holding</li>
+          </ul>
+          <p>
+            You can change your guide anytime in Preferences, or even switch
+            mid-conversation if the mood strikes.
+          </p>
+        </div>
       </section>
 
       <section className="about-section">

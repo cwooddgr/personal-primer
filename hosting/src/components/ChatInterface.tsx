@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Markdown from 'react-markdown';
 import { sendMessage, endSession, sendArcRefinementMessage, changeToneMidConversation, Conversation, ConversationMessage, SuggestedReading, ArcCompletionData, ArcRefinementMessage, ToneId, ToneDefinition, ToneChange } from '../api/client';
 import ToneSelector from './ToneSelector';
@@ -30,6 +30,15 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
     initialConversation?.toneChanges || []
   );
   const [changingTone, setChangingTone] = useState(false);
+
+  const refinementRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to refinement section when it appears
+  useEffect(() => {
+    if (refiningArc && refinementRef.current) {
+      refinementRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [refiningArc]);
 
   const handleToneChange = async (newTone: ToneId) => {
     if (newTone === currentTone || changingTone || sessionEnded) return;
@@ -283,16 +292,14 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
                 <Markdown>{arcCompletion.summary}</Markdown>
               </div>
               <div className="next-arc-preview">
-                <div className="next-arc-header">
-                  <p className="next-arc-label">Coming tomorrow</p>
-                  {!refiningArc && (
-                    <button onClick={handleStartRefinement} className="change-arc-link">
-                      Change
-                    </button>
-                  )}
-                </div>
+                <p className="next-arc-label">Coming tomorrow</p>
                 <p className="next-arc-theme">{arcCompletion.nextArc.theme}</p>
                 <p className="next-arc-description">{arcCompletion.nextArc.description}</p>
+                {!refiningArc && (
+                  <button onClick={handleStartRefinement} className="change-arc-link">
+                    Change
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -308,7 +315,7 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
           )}
 
           {refiningArc && (
-            <div className="arc-refinement">
+            <div className="arc-refinement" ref={refinementRef}>
               <div className="messages">
                 {refinementMessages.map((msg, index) => (
                   <div key={index} className={`message ${msg.role}`}>

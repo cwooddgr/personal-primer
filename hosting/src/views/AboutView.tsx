@@ -16,11 +16,6 @@ function AboutView({ isFirstTime = false, onGetStarted }: AboutViewProps) {
 
   return (
     <div className="about-view">
-      {!isFirstTime && (
-        <button className="back-link" onClick={handleBack}>
-          &larr; Back
-        </button>
-      )}
       <h1>Welcome to Primer</h1>
 
       <section className="about-section">
@@ -126,10 +121,16 @@ function AboutView({ isFirstTime = false, onGetStarted }: AboutViewProps) {
         </ul>
       </section>
 
-      {isFirstTime && (
+      {isFirstTime ? (
         <section className="about-cta">
           <button className="get-started-button" onClick={handleGetStarted}>
             Let's begin your first arc
+          </button>
+        </section>
+      ) : (
+        <section className="about-cta">
+          <button className="back-link" onClick={handleBack}>
+            &larr; Back
           </button>
         </section>
       )}

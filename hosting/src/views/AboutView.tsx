@@ -10,8 +10,17 @@ function AboutView({ isFirstTime = false, onGetStarted }: AboutViewProps) {
     }
   };
 
+  const handleBack = () => {
+    window.history.back();
+  };
+
   return (
     <div className="about-view">
+      {!isFirstTime && (
+        <button className="back-link" onClick={handleBack}>
+          &larr; Back
+        </button>
+      )}
       <h1>Welcome to Primer</h1>
 
       <section className="about-section">

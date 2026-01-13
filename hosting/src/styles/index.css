@@ -99,12 +99,12 @@ body {
   padding: 4rem var(--spacing);
   text-align: center;
   color: var(--color-text-muted);
-  animation: pulse 2s ease-in-out infinite;
+  animation: shimmer 2.5s ease-in-out infinite;
 }
 
-@keyframes pulse {
+@keyframes shimmer {
   0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
+  50% { opacity: 0.9; }
 }
 
 .error-message {
@@ -401,6 +401,7 @@ body {
 .typing {
   color: var(--color-text-muted);
   font-style: italic;
+  animation: shimmer 2.5s ease-in-out infinite;
 }
 
 .incomplete-prompt {
@@ -507,6 +508,7 @@ body {
   font-style: italic;
   text-align: center;
   padding: 1rem;
+  animation: shimmer 2.5s ease-in-out infinite;
 }
 
 .suggested-reading {

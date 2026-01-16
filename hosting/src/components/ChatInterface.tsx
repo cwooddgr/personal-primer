@@ -364,7 +364,7 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
         </div>
       ) : ending ? (
         <div className="chat-input-area">
-          <p className="ending-message">Ending session...</p>
+          <p className="ending-message">Ending session</p>
         </div>
       ) : (
         <>

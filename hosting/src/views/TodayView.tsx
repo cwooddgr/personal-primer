@@ -44,7 +44,7 @@ function TodayView() {
   }, []);
 
   if (loading) {
-    return <div className="loading">Preparing today's encounter...</div>;
+    return <div className="loading">Preparing today's encounter</div>;
   }
 
   if (error) {

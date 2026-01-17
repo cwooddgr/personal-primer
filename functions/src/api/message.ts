@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { MessageRequest, MessageResponse } from '../types';
-import { getBundle, getActiveArc, validateDateId, getUserTone, getConversation } from '../utils/firestore';
+import { getBundle, getActiveArc, validateDateId, getUserTone, getConversation, deliverBundle } from '../utils/firestore';
 import { handleMessage } from '../services/conversationManager';
 
 function getErrorMessage(error: unknown): string {
@@ -55,6 +55,12 @@ export async function handlePostMessage(req: Request, res: Response, userId: str
     } else if (existingConversation?.initialTone) {
       // Use the conversation's initial tone
       tone = existingConversation.initialTone;
+    }
+
+    // On first message, deliver the bundle (marks as delivered + creates exposures)
+    // This ensures only intentional engagement counts toward arc progression
+    if (!existingConversation) {
+      await deliverBundle(userId, bundle);
     }
 
     const { response, conversation, sessionShouldEnd, incompleteMessageDetected } = await handleMessage(userId, message, bundle, arc, tone, forceComplete);

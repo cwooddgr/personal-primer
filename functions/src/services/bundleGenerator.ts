@@ -10,7 +10,6 @@ import {
   getRecentExposures,
   getRecentInsights,
   createBundle,
-  createExposure,
   calculateDayInArc,
   determinePhase,
   updateArcPhase,
@@ -768,6 +767,7 @@ export async function generateDailyBundle(userId: string, bundleId: string, tone
     id: bundleId,
     date: now,
     arcId: arc.id,
+    status: 'draft', // Will be marked 'delivered' when user sends first message
     music: {
       title: musicSelection.title,
       artist: musicSelection.artist,
@@ -792,35 +792,9 @@ export async function generateDailyBundle(userId: string, bundleId: string, tone
 
   await createBundle(userId, bundle);
 
-  // Create exposure records
-  const exposureBase = {
-    dateShown: now,
-    arcId: arc.id,
-  };
-
-  // For music, use composer as creator if available (for classical music)
-  const musicCreator = musicSelection.composer || musicSelection.artist;
-
-  await Promise.all([
-    createExposure(userId, {
-      ...exposureBase,
-      artifactType: 'music',
-      artifactIdentifier: `${musicSelection.title} - ${musicSelection.artist}`,
-      creator: musicCreator,
-    }),
-    createExposure(userId, {
-      ...exposureBase,
-      artifactType: 'image',
-      artifactIdentifier: `${imageSelection.title} - ${imageSelection.artist}`,
-      creator: imageSelection.artist,
-    }),
-    createExposure(userId, {
-      ...exposureBase,
-      artifactType: 'text',
-      artifactIdentifier: `${textSelection.source} - ${textSelection.author}`,
-      creator: textSelection.author,
-    }),
-  ]);
+  // Note: Exposures are NOT created here - they're created when the bundle is
+  // delivered (user sends first message). This prevents passive page loads
+  // from affecting the exposure tracking.
 
   return bundle;
 }

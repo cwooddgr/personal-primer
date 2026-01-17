@@ -33,6 +33,7 @@ export interface DailyBundle {
   id: string; // Format: YYYY-MM-DD
   date: Timestamp;
   arcId: string;
+  status: 'draft' | 'delivered'; // Draft until user sends first message
   music: {
     title: string;
     artist: string;

@@ -109,9 +109,28 @@ Bundle generation uses a two-phase approach to ensure framing text always matche
 **Phase 2: Framing Text Generation**
 6. Once all artifacts are finalized with valid links, generate framing text via separate LLM call
 7. On final day of arc, framing includes special closure instructions
-8. Persist bundle and exposure records (including creator info)
+8. Persist bundle as `status: 'draft'` (exposures NOT created yet)
 
 This two-phase approach ensures framing text always references the actual displayed artifacts, even when artifacts are replaced during validation or link resolution.
+
+### Bundle Status (Draft/Delivered)
+Bundles have a `status` field that tracks intentional engagement:
+- **draft**: Bundle generated but user hasn't interacted (just loaded the page)
+- **delivered**: User sent their first message, marking intentional engagement
+
+This prevents passive page loads (e.g., Safari refreshing a background tab) from advancing the arc or recording exposures.
+
+**On first message:**
+1. Bundle marked as `status: 'delivered'`
+2. Exposure records created (music, image, text)
+3. Bundle now counts toward `dayInArc`
+
+**Queries filter by status:**
+- `calculateDayInArc` only counts delivered bundles
+- `getBundleHistory` only returns delivered bundles
+- `getArcBundles` only returns delivered bundles
+
+Draft bundles exist in Firestore but are effectively invisible to the user experience.
 
 ### Classical Music Search
 For classical music, the LLM provides additional fields: `composer`, `performer`, `isClassical`. The search strategy differs:
@@ -180,6 +199,7 @@ Users can customize the AI guide's communication style via five tones:
 - `UserProfile.hasSelectedTone` - Whether user completed onboarding tone selection
 - `Conversation.initialTone` - Tone when conversation started
 - `Conversation.toneChanges[]` - Array of `{messageIndex, tone}` for mid-conversation changes
+- `DailyBundle.status` - `'draft'` or `'delivered'` (see Bundle Status section)
 - `DailyBundle.tone` - Tone used for framing text generation
 
 **Frontend Flow:**
@@ -284,3 +304,4 @@ Get the userId from Firebase Console > Authentication > Users.
 
 - `./scripts/delete-today-data.sh` - Deletes today's bundle, conversation, and session insights so it can be regenerated. Exposures must still be deleted manually in Firebase Console (they have auto-generated IDs). Run this when debugging bundle generation issues.
 - `./scripts/migrate-to-multiuser.ts` - Migrates single-user data to multi-user structure under `/users/{userId}/`
+- `./scripts/add-bundle-status.ts` - Adds `status: 'delivered'` to existing bundles (one-time migration for the draft/delivered feature)

@@ -165,8 +165,10 @@ export async function getPendingArc(userId: string): Promise<Arc | null> {
 
 export async function getArcBundles(userId: string, arcId: string): Promise<DailyBundle[]> {
   const collections = getUserCollections(userId);
+  // Only return delivered bundles (exclude drafts that were never engaged with)
   const snapshot = await collections.dailyBundles
     .where('arcId', '==', arcId)
+    .where('status', '==', 'delivered')
     .orderBy('date', 'asc')
     .get();
 
@@ -198,7 +200,11 @@ export async function createBundle(userId: string, bundle: DailyBundle): Promise
 
 export async function getBundleHistory(userId: string, limit: number = 30, before?: string): Promise<DailyBundle[]> {
   const collections = getUserCollections(userId);
-  let query = collections.dailyBundles.orderBy('date', 'desc').limit(limit);
+  // Only return delivered bundles (exclude drafts that were never engaged with)
+  let query = collections.dailyBundles
+    .where('status', '==', 'delivered')
+    .orderBy('date', 'desc')
+    .limit(limit);
 
   if (before) {
     const beforeDoc = await collections.dailyBundles.doc(before).get();
@@ -218,6 +224,50 @@ export async function updateBundleSuggestedReading(
 ): Promise<void> {
   const collections = getUserCollections(userId);
   await collections.dailyBundles.doc(bundleId).update({ suggestedReading });
+}
+
+// Mark a bundle as delivered and create exposure records
+// Called when user sends their first message (intentional engagement)
+export async function deliverBundle(userId: string, bundle: DailyBundle): Promise<void> {
+  if (bundle.status === 'delivered') {
+    return; // Already delivered
+  }
+
+  const collections = getUserCollections(userId);
+
+  // Mark as delivered
+  await collections.dailyBundles.doc(bundle.id).update({ status: 'delivered' });
+
+  // Create exposure records
+  const now = toTimestamp(new Date());
+  const exposureBase = {
+    dateShown: now,
+    arcId: bundle.arcId,
+  };
+
+  // For music, use composer as creator if available (for classical music)
+  const musicCreator = bundle.music.composer || bundle.music.artist;
+
+  await Promise.all([
+    createExposure(userId, {
+      ...exposureBase,
+      artifactType: 'music',
+      artifactIdentifier: `${bundle.music.title} - ${bundle.music.artist}`,
+      creator: musicCreator,
+    }),
+    createExposure(userId, {
+      ...exposureBase,
+      artifactType: 'image',
+      artifactIdentifier: `${bundle.image.title} - ${bundle.image.artist}`,
+      creator: bundle.image.artist || '',
+    }),
+    createExposure(userId, {
+      ...exposureBase,
+      artifactType: 'text',
+      artifactIdentifier: `${bundle.text.source} - ${bundle.text.author}`,
+      creator: bundle.text.author,
+    }),
+  ]);
 }
 
 // Exposure operations
@@ -385,11 +435,13 @@ export async function createReaction(userId: string, reaction: Omit<UserReaction
   await collections.userReactions.add(reaction);
 }
 
-// Arc phase calculation - counts bundles generated for this arc
+// Arc phase calculation - counts delivered bundles for this arc
+// Only bundles where user actually engaged (sent a message) count toward arc progression
 export async function calculateDayInArc(userId: string, arc: Arc): Promise<number> {
   const collections = getUserCollections(userId);
   const snapshot = await collections.dailyBundles
     .where('arcId', '==', arc.id)
+    .where('status', '==', 'delivered')
     .count()
     .get();
 

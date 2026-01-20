@@ -62,7 +62,12 @@ export async function handleGetToday(req: Request, res: Response, userId: string
     // Get conversation if any
     const conversation = await getConversation(userId, todayId);
 
-    const dayInArc = await calculateDayInArc(userId, arc);
+    // Calculate dayInArc: for draft bundles, add 1 to match the framing text
+    // (framing is generated with count+1 since it's for the "new" day)
+    let dayInArc = await calculateDayInArc(userId, arc);
+    if (bundle.status === 'draft') {
+      dayInArc += 1;
+    }
 
     const response: TodayResponse = {
       bundle,

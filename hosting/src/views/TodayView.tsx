@@ -1,54 +1,57 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { getToday, getTones, TodayResponse, ToneDefinition, ToneId } from '../api/client';
 import MusicCard from '../components/MusicCard';
 import ImageCard from '../components/ImageCard';
 import TextCard from '../components/TextCard';
 import FramingText from '../components/FramingText';
 import ChatInterface from '../components/ChatInterface';
+import ErrorDisplay from '../components/ErrorDisplay';
 
 function TodayView() {
   const [data, setData] = useState<TodayResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
   const [tones, setTones] = useState<ToneDefinition[]>([]);
   const [currentTone, setCurrentTone] = useState<ToneId>('guided');
 
-  useEffect(() => {
-    async function loadToday() {
-      console.log('[TodayView] Loading today data...');
-      try {
-        const [todayResponse, tonesResponse] = await Promise.all([
-          getToday(),
-          getTones(),
-        ]);
-        console.log('[TodayView] Loaded successfully:', {
-          bundleId: todayResponse.bundle.id,
-          arcTheme: todayResponse.arc.theme,
-          hasConversation: !!todayResponse.conversation,
-          messageCount: todayResponse.conversation?.messages.length ?? 0,
-          sessionEnded: todayResponse.conversation?.sessionEnded ?? false,
-          currentTone: todayResponse.currentTone,
-        });
-        setData(todayResponse);
-        setTones(tonesResponse.tones);
-        setCurrentTone(todayResponse.currentTone);
-      } catch (err) {
-        console.error('[TodayView] Load failed:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load');
-      } finally {
-        setLoading(false);
-      }
+  const loadToday = useCallback(async () => {
+    console.log('[TodayView] Loading today data...');
+    setLoading(true);
+    setError(null);
+    try {
+      const [todayResponse, tonesResponse] = await Promise.all([
+        getToday(),
+        getTones(),
+      ]);
+      console.log('[TodayView] Loaded successfully:', {
+        bundleId: todayResponse.bundle.id,
+        arcTheme: todayResponse.arc.theme,
+        hasConversation: !!todayResponse.conversation,
+        messageCount: todayResponse.conversation?.messages.length ?? 0,
+        sessionEnded: todayResponse.conversation?.sessionEnded ?? false,
+        currentTone: todayResponse.currentTone,
+      });
+      setData(todayResponse);
+      setTones(tonesResponse.tones);
+      setCurrentTone(todayResponse.currentTone);
+    } catch (err) {
+      console.error('[TodayView] Load failed:', err);
+      setError(err);
+    } finally {
+      setLoading(false);
     }
-
-    loadToday();
   }, []);
+
+  useEffect(() => {
+    loadToday();
+  }, [loadToday]);
 
   if (loading) {
     return <div className="loading">Preparing today's encounter</div>;
   }
 
   if (error) {
-    return <div className="error-message">{error}</div>;
+    return <ErrorDisplay error={error} onRetry={loadToday} />;
   }
 
   if (!data) {

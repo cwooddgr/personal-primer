@@ -1,33 +1,36 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { getHistory, ArcWithBundles } from '../api/client';
+import ErrorDisplay from '../components/ErrorDisplay';
 
 function HistoryView() {
   const [arcGroups, setArcGroups] = useState<ArcWithBundles[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+
+  const loadHistory = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await getHistory(30);
+      setArcGroups(response.arcGroups);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    async function loadHistory() {
-      try {
-        const response = await getHistory(30);
-        setArcGroups(response.arcGroups);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load');
-      } finally {
-        setLoading(false);
-      }
-    }
-
     loadHistory();
-  }, []);
+  }, [loadHistory]);
 
   if (loading) {
     return <div className="loading">Loading history</div>;
   }
 
   if (error) {
-    return <div className="error-message">{error}</div>;
+    return <ErrorDisplay error={error} onRetry={loadHistory} />;
   }
 
   if (arcGroups.length === 0) {

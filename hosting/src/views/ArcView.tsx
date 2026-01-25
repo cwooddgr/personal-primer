@@ -1,34 +1,37 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { getArc, Arc } from '../api/client';
+import ErrorDisplay from '../components/ErrorDisplay';
 
 function ArcView() {
   const [arc, setArc] = useState<Arc | null>(null);
   const [dayInArc, setDayInArc] = useState<number>(0);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+
+  const loadArc = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await getArc();
+      setArc(response.arc);
+      setDayInArc(response.dayInArc);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    async function loadArc() {
-      try {
-        const response = await getArc();
-        setArc(response.arc);
-        setDayInArc(response.dayInArc);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load');
-      } finally {
-        setLoading(false);
-      }
-    }
-
     loadArc();
-  }, []);
+  }, [loadArc]);
 
   if (loading) {
     return <div className="loading">Loading arc</div>;
   }
 
   if (error) {
-    return <div className="error-message">{error}</div>;
+    return <ErrorDisplay error={error} onRetry={loadArc} />;
   }
 
   if (!arc) {

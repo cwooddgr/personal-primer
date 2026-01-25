@@ -30,9 +30,13 @@ async function fetchAPI<T>(
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Request failed' }));
-    console.error(`[API] ${method} ${path} failed:`, response.status, error);
-    throw new Error(error.error || 'Request failed');
+    const errorBody = await response.json().catch(() => ({ error: 'Request failed' }));
+    console.error(`[API] ${method} ${path} failed:`, response.status, errorBody);
+    // Include status code and full error body for better error parsing
+    const errorMessage = typeof errorBody.error === 'string'
+      ? errorBody.error
+      : JSON.stringify(errorBody);
+    throw new Error(`${response.status} ${errorMessage}`);
   }
 
   const data = await response.json();

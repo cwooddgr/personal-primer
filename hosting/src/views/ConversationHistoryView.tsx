@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import Markdown from 'react-markdown';
 import { getConversationHistory, getTones, ConversationHistoryResponse, ConversationMessage, ToneDefinition, ToneId, ToneChange } from '../api/client';
@@ -6,38 +6,41 @@ import MusicCard from '../components/MusicCard';
 import ImageCard from '../components/ImageCard';
 import TextCard from '../components/TextCard';
 import FramingText from '../components/FramingText';
+import ErrorDisplay from '../components/ErrorDisplay';
 
 function ConversationHistoryView() {
   const { date } = useParams<{ date: string }>();
   const [data, setData] = useState<ConversationHistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
   const [tones, setTones] = useState<ToneDefinition[]>([]);
 
-  useEffect(() => {
-    async function loadConversation() {
-      if (!date) {
-        setError('No date specified');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const [historyResponse, tonesResponse] = await Promise.all([
-          getConversationHistory(date),
-          getTones(),
-        ]);
-        setData(historyResponse);
-        setTones(tonesResponse.tones);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load conversation');
-      } finally {
-        setLoading(false);
-      }
+  const loadConversation = useCallback(async () => {
+    if (!date) {
+      setError(new Error('No date specified'));
+      setLoading(false);
+      return;
     }
 
-    loadConversation();
+    setLoading(true);
+    setError(null);
+    try {
+      const [historyResponse, tonesResponse] = await Promise.all([
+        getConversationHistory(date),
+        getTones(),
+      ]);
+      setData(historyResponse);
+      setTones(tonesResponse.tones);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setLoading(false);
+    }
   }, [date]);
+
+  useEffect(() => {
+    loadConversation();
+  }, [loadConversation]);
 
   // Helper to get tone name by ID
   const getToneName = (toneId: ToneId): string => {
@@ -53,7 +56,7 @@ function ConversationHistoryView() {
     return (
       <div className="conversation-history-view">
         <Link to="/history" className="back-link">&larr; Back to history</Link>
-        <div className="error-message">{error}</div>
+        <ErrorDisplay error={error} onRetry={loadConversation} />
       </div>
     );
   }

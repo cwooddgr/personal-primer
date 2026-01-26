@@ -32,6 +32,34 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
   const [changingTone, setChangingTone] = useState(false);
 
   const refinementRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const suggestedReadingRef = useRef<HTMLDivElement>(null);
+  const arcCompletionRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to new messages when they arrive
+  useEffect(() => {
+    if (messagesEndRef.current && messages.length > 0) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [messages, sending]);
+
+  // Auto-scroll to arc completion when it appears
+  useEffect(() => {
+    if (arcCompletion && arcCompletionRef.current) {
+      arcCompletionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [arcCompletion]);
+
+  // Auto-scroll to suggested reading when it appears (after arc completion scroll if both present)
+  useEffect(() => {
+    if (suggestedReading && suggestedReadingRef.current) {
+      // Small delay to let arc completion scroll finish first if both appear together
+      const timeout = setTimeout(() => {
+        suggestedReadingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, arcCompletion ? 500 : 0);
+      return () => clearTimeout(timeout);
+    }
+  }, [suggestedReading, arcCompletion]);
 
   // Auto-scroll to refinement section when it appears
   useEffect(() => {
@@ -39,6 +67,18 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
       refinementRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [refiningArc]);
+
+  // Auto-scroll to new refinement messages
+  useEffect(() => {
+    if (refiningArc && refinementMessages.length > 0 && refinementRef.current) {
+      // Scroll to show the latest message in the refinement section
+      const messagesContainer = refinementRef.current.querySelector('.messages');
+      if (messagesContainer) {
+        const lastMessage = messagesContainer.lastElementChild;
+        lastMessage?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }
+    }
+  }, [refinementMessages, refiningArc]);
 
   const handleToneChange = async (newTone: ToneId) => {
     if (newTone === currentTone || changingTone || sessionEnded) return;
@@ -279,6 +319,7 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
             <div className="message-content typing">Thinking</div>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       {sessionEnded ? (
@@ -286,7 +327,7 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
           <p className="session-ended">Session ended</p>
 
           {arcCompletion && (
-            <div className="arc-completion">
+            <div className="arc-completion" ref={arcCompletionRef}>
               <div className="arc-summary">
                 <p className="arc-completion-label">Arc Complete</p>
                 <Markdown>{arcCompletion.summary}</Markdown>
@@ -305,7 +346,7 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
           )}
 
           {suggestedReading && (
-            <div className="suggested-reading">
+            <div className="suggested-reading" ref={suggestedReadingRef}>
               <p className="suggested-reading-label">Further reading</p>
               <a href={suggestedReading.url} target="_blank" rel="noopener noreferrer" className="suggested-reading-link">
                 {suggestedReading.title}

@@ -73,6 +73,14 @@ function HistoryView() {
                     <p>
                       <strong>Text:</strong> {bundle.text.source} &mdash; {bundle.text.author}
                     </p>
+                    {bundle.suggestedReading && (
+                      <p>
+                        <strong>Further reading:</strong>{' '}
+                        <a href={bundle.suggestedReading.url} target="_blank" rel="noopener noreferrer">
+                          {bundle.suggestedReading.title}
+                        </a>
+                      </p>
+                    )}
                     <Link to={`/history/${bundle.id}/conversation`} className="conversation-link">
                       View conversation &rarr;
                     </Link>

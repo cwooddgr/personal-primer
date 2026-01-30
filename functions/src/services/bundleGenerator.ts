@@ -334,12 +334,13 @@ function buildFramingPrompt(
     .filter(s => s)
     .join('\n');
 
+  const isFirstDay = dayInArc === 1;
   const isLastDay = dayInArc >= arc.targetDurationDays;
 
   let prompt = `CURRENT ARC: ${arc.theme}
 ${arc.description}
 
-Day ${dayInArc} of ~${arc.targetDurationDays} (${arc.currentPhase} phase)${isLastDay ? ' — FINAL DAY' : ''}
+Day ${dayInArc} of ~${arc.targetDurationDays} (${arc.currentPhase} phase)${isFirstDay ? ' — FIRST DAY' : ''}${isLastDay ? ' — FINAL DAY' : ''}
 
 TODAY'S ARTIFACTS (already selected and validated):
 - MUSIC: "${music.title}" by ${music.artist}${music.composer ? ` (composer: ${music.composer})` : ''}
@@ -349,6 +350,15 @@ TODAY'S ARTIFACTS (already selected and validated):
 <stored_user_insights>
 ${insightsSummary || '(no insights recorded yet)'}
 </stored_user_insights>`;
+
+  if (isFirstDay) {
+    prompt += `
+
+IMPORTANT: This is the FIRST DAY of the "${arc.theme}" arc. The framing text should:
+- Introduce this as a fresh beginning — do NOT reference "yesterday" or prior days with this theme
+- Open the theme with curiosity and invitation
+- Set the tone for the arc without assuming any prior encounters on this topic`;
+  }
 
   if (isLastDay) {
     prompt += `

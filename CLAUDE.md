@@ -241,9 +241,9 @@ The history page (`/history`) displays past bundles organized by arc:
 
 ## Key Constraints
 
-- No artifact may repeat within 14-day window (check exposures)
-- No text author may repeat within 14-day window (programmatically enforced with normalized name comparison, e.g., "T.S. Eliot" = "T. S. Eliot")
-- No image may repeat within 14-day window (programmatically enforced with normalized `title - artist` comparison)
+- No artifact may repeat within 30-day window (check exposures)
+- No text author may repeat within 30-day window (programmatically enforced with normalized name comparison, e.g., "T.S. Eliot" = "T. S. Eliot")
+- No image may repeat within 30-day window (programmatically enforced with normalized `title - artist` comparison)
 - For classical music, composer is stored as `creator` in exposures (not performer) to avoid same-composer repeats
 - Music creators are soft-avoided via LLM instructions (exposures included in alternative prompts)
 - All links must be validated before delivery (HEAD request, 200 status)

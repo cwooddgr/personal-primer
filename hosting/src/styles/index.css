@@ -266,6 +266,28 @@ body {
   margin-bottom: 0.75rem;
 }
 
+.move-on-link {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 0.5rem;
+  text-decoration: underline;
+  opacity: 0.7;
+}
+
+.move-on-link:hover {
+  opacity: 1;
+}
+
+.move-on-link:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
 .today-header .arc-description {
   font-size: 1rem;
   color: var(--color-text-muted);

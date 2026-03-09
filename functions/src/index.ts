@@ -11,6 +11,7 @@ import { handleGetArc } from './api/arc';
 import { handleGetHistory } from './api/history';
 import { handleGetConversation } from './api/conversationHistory';
 import { handleRefineArcMessage } from './api/refineArc';
+import { handleEndArcEarly } from './api/endArcEarly';
 import { handleRegister, handleForgotPassword, handleResendVerification } from './api/auth';
 import { checkInactiveSessions } from './scheduled/inactivityCheck';
 import { verifyAuth } from './middleware/auth';
@@ -95,6 +96,10 @@ export const api = onRequest(
     // Match /api/history/:date/conversation pattern
     if (path.match(/^\/api\/history\/\d{4}-\d{2}-\d{2}\/conversation$/) && method === 'GET') {
       return handleGetConversation(req, res, userId);
+    }
+
+    if (path === '/api/arc/end-early' && method === 'POST') {
+      return handleEndArcEarly(req, res, userId);
     }
 
     if (path === '/api/arc/refine/message' && method === 'POST') {

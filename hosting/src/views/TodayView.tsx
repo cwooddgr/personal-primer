@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { getToday, getTones, TodayResponse, ToneDefinition, ToneId } from '../api/client';
+import { getToday, getTones, endArcEarly, TodayResponse, ToneDefinition, ToneId, ArcCompletionData, SuggestedReading } from '../api/client';
 import MusicCard from '../components/MusicCard';
 import ImageCard from '../components/ImageCard';
 import TextCard from '../components/TextCard';
@@ -13,6 +13,10 @@ function TodayView() {
   const [error, setError] = useState<unknown>(null);
   const [tones, setTones] = useState<ToneDefinition[]>([]);
   const [currentTone, setCurrentTone] = useState<ToneId>('guided');
+  const [endingArc, setEndingArc] = useState(false);
+  const [arcCompletion, setArcCompletion] = useState<ArcCompletionData | undefined>();
+  const [arcEndSuggestedReading, setArcEndSuggestedReading] = useState<SuggestedReading | undefined>();
+  const [arcEndedSessionEarly, setArcEndedSessionEarly] = useState(false);
 
   const loadToday = useCallback(async () => {
     console.log('[TodayView] Loading today data...');
@@ -58,7 +62,29 @@ function TodayView() {
     return <div className="error-message">No data available</div>;
   }
 
+  const handleEndArcEarly = async () => {
+    if (endingArc) return;
+    if (!window.confirm('End this arc and move to a new theme?')) return;
+
+    setEndingArc(true);
+    try {
+      const response = await endArcEarly();
+      if (response.arcCompletion) {
+        setArcCompletion(response.arcCompletion);
+      }
+      if (response.suggestedReading) {
+        setArcEndSuggestedReading(response.suggestedReading);
+      }
+      setArcEndedSessionEarly(true);
+    } catch (err) {
+      console.error('[TodayView] End arc early failed:', err);
+    } finally {
+      setEndingArc(false);
+    }
+  };
+
   const { bundle, conversation, arc, dayInArc } = data;
+  const isLastDay = dayInArc >= arc.targetDurationDays;
 
   return (
     <div className="today-view">
@@ -66,6 +92,15 @@ function TodayView() {
         <h1>Today</h1>
         <p className="arc-badge">
           {arc.theme} &middot; Day {dayInArc} of {arc.targetDurationDays}
+          {!isLastDay && !arcCompletion && (
+            <button
+              onClick={handleEndArcEarly}
+              disabled={endingArc}
+              className="move-on-link"
+            >
+              {endingArc ? 'Ending arc...' : 'Move on'}
+            </button>
+          )}
         </p>
         {(arc.shortDescription || arc.description) && (
           <p className="arc-description">
@@ -101,7 +136,9 @@ function TodayView() {
       <ChatInterface
         initialConversation={conversation}
         sessionEnded={conversation?.sessionEnded ?? false}
-        initialSuggestedReading={bundle.suggestedReading}
+        initialSuggestedReading={arcEndSuggestedReading || bundle.suggestedReading}
+        initialArcCompletion={arcCompletion}
+        forceSessionEnded={arcEndedSessionEarly}
         tones={tones}
         currentTone={currentTone}
         onToneChange={setCurrentTone}

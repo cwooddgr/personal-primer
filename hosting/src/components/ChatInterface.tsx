@@ -1,18 +1,20 @@
 import { useState, useRef, useEffect } from 'react';
 import Markdown from 'react-markdown';
-import { sendMessage, endSession, sendArcRefinementMessage, changeToneMidConversation, Conversation, ConversationMessage, SuggestedReading, ArcCompletionData, ArcRefinementMessage, ToneId, ToneDefinition, ToneChange } from '../api/client';
+import { sendMessage, endSession, endArcEarly, sendArcRefinementMessage, changeToneMidConversation, Conversation, ConversationMessage, SuggestedReading, ArcCompletionData, ArcRefinementMessage, ToneId, ToneDefinition, ToneChange } from '../api/client';
 import ToneSelector from './ToneSelector';
 
 interface ChatInterfaceProps {
   initialConversation: Conversation | null;
   sessionEnded: boolean;
   initialSuggestedReading?: SuggestedReading;
+  initialArcCompletion?: ArcCompletionData;
+  forceSessionEnded?: boolean;
   tones: ToneDefinition[];
   currentTone: ToneId;
   onToneChange: (tone: ToneId) => void;
 }
 
-function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded, initialSuggestedReading, tones, currentTone, onToneChange }: ChatInterfaceProps) {
+function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded, initialSuggestedReading, initialArcCompletion, forceSessionEnded, tones, currentTone, onToneChange }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<ConversationMessage[]>(
     initialConversation?.messages || []
   );
@@ -35,6 +37,25 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const suggestedReadingRef = useRef<HTMLDivElement>(null);
   const arcCompletionRef = useRef<HTMLDivElement>(null);
+
+  // Handle parent-driven arc completion (end arc early)
+  useEffect(() => {
+    if (initialArcCompletion) {
+      setArcCompletion(initialArcCompletion);
+    }
+  }, [initialArcCompletion]);
+
+  useEffect(() => {
+    if (forceSessionEnded) {
+      setSessionEnded(true);
+    }
+  }, [forceSessionEnded]);
+
+  useEffect(() => {
+    if (initialSuggestedReading) {
+      setSuggestedReading(initialSuggestedReading);
+    }
+  }, [initialSuggestedReading]);
 
   // Auto-scroll to new messages when they arrive
   useEffect(() => {
@@ -149,13 +170,14 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
 
       setMessages(response.conversation.messages);
 
-      // Auto-end session if Claude detected user wants to end
+      // Auto-end session (or arc) if Claude detected user wants to end
       if (response.sessionShouldEnd) {
-        console.log('[ChatInterface] Auto-ending session (sessionShouldEnd=true)');
+        const isArcEnd = response.arcShouldEnd;
+        console.log(`[ChatInterface] Auto-ending ${isArcEnd ? 'arc' : 'session'}`);
         setEnding(true);
         try {
-          const endResponse = await endSession();
-          console.log('[ChatInterface] Auto-end session success:', {
+          const endResponse = isArcEnd ? await endArcEarly() : await endSession();
+          console.log('[ChatInterface] Auto-end success:', {
             hasSuggestedReading: !!endResponse.suggestedReading,
             hasArcCompletion: !!endResponse.arcCompletion,
           });
@@ -167,7 +189,7 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
             setArcCompletion(endResponse.arcCompletion);
           }
         } catch (endError) {
-          console.error('[ChatInterface] Auto-end session failed:', endError);
+          console.error('[ChatInterface] Auto-end failed:', endError);
         } finally {
           setEnding(false);
         }

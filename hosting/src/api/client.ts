@@ -142,6 +142,7 @@ export interface MessageResponse {
   response: string;
   conversation: Conversation;
   sessionShouldEnd?: boolean;
+  arcShouldEnd?: boolean;
   incompleteMessageDetected?: boolean;
 }
 
@@ -256,6 +257,14 @@ export interface ArcRefinementResponse {
     description: string;
     shortDescription: string;
   };
+}
+
+export async function endArcEarly(): Promise<EndSessionResponse> {
+  const localDate = getLocalDate();
+  return fetchAPI<EndSessionResponse>('/arc/end-early', {
+    method: 'POST',
+    body: JSON.stringify({ date: localDate }),
+  });
 }
 
 export async function sendArcRefinementMessage(

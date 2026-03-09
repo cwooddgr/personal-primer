@@ -163,6 +163,7 @@ export interface MessageResponse {
   response: string;
   conversation: Conversation;
   sessionShouldEnd?: boolean;
+  arcShouldEnd?: boolean;
   incompleteMessageDetected?: boolean;
 }
 

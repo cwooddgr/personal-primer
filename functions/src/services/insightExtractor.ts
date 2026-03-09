@@ -146,14 +146,18 @@ export interface EndSessionResult {
   arcCompletion: ArcCompletionData | null;
 }
 
-export async function extractAndEndSession(userId: string, bundleId: string, bundle: DailyBundle): Promise<EndSessionResult> {
+export async function extractAndEndSession(userId: string, bundleId: string, bundle: DailyBundle, forceArcCompletion = false): Promise<EndSessionResult> {
   const conversation = await getConversation(userId, bundleId);
 
   if (!conversation) {
+    // Even with no conversation, we may need to force arc completion
+    if (forceArcCompletion) {
+      return { suggestedReading: null, arcCompletion: await forceCompleteArc(userId, null) };
+    }
     return { suggestedReading: null, arcCompletion: null };
   }
 
-  if (conversation.sessionEnded) {
+  if (conversation.sessionEnded && !forceArcCompletion) {
     // Already ended - return existing suggested reading if any
     return { suggestedReading: bundle.suggestedReading || null, arcCompletion: null };
   }
@@ -161,20 +165,22 @@ export async function extractAndEndSession(userId: string, bundleId: string, bun
   let suggestedReading: SuggestedReading | null = null;
   let arcCompletion: ArcCompletionData | null = null;
 
-  if (conversation.messages.length > 0) {
-    const result = await extractInsights(userId, bundleId, bundle);
-    suggestedReading = result?.suggestedReading || null;
-  } else {
-    // No messages, just mark as ended
-    await updateConversation(userId, bundleId, { sessionEnded: true });
+  if (!conversation.sessionEnded) {
+    if (conversation.messages.length > 0) {
+      const result = await extractInsights(userId, bundleId, bundle);
+      suggestedReading = result?.suggestedReading || null;
+    } else {
+      // No messages, just mark as ended
+      await updateConversation(userId, bundleId, { sessionEnded: true });
+    }
   }
 
-  // Check if this is the last day of the arc
+  // Check if arc should be completed
   const arc = await getActiveArc(userId);
   if (arc) {
     const dayInArc = await calculateDayInArc(userId, arc);
-    if (dayInArc >= arc.targetDurationDays) {
-      console.log(`Arc "${arc.theme}" completed on day ${dayInArc}. Generating summary and next arc...`);
+    if (forceArcCompletion || dayInArc >= arc.targetDurationDays) {
+      console.log(`Arc "${arc.theme}" ${forceArcCompletion ? 'ended early' : 'completed'} on day ${dayInArc}. Generating summary and next arc...`);
 
       // Get user's tone for the arc summary
       const tone = await getUserTone(userId);
@@ -189,4 +195,20 @@ export async function extractAndEndSession(userId: string, bundleId: string, bun
   }
 
   return { suggestedReading, arcCompletion };
+}
+
+async function forceCompleteArc(userId: string, conversation: Conversation | null): Promise<ArcCompletionData | null> {
+  const arc = await getActiveArc(userId);
+  if (!arc) return null;
+
+  const dayInArc = await calculateDayInArc(userId, arc);
+  console.log(`Arc "${arc.theme}" ended early on day ${dayInArc}. Generating summary and next arc...`);
+
+  const tone = await getUserTone(userId);
+  const arcCompletion = await generateArcCompletion(userId, arc, conversation, tone);
+
+  await completeArc(userId, arc.id);
+  console.log(`Marked arc "${arc.theme}" as completed`);
+
+  return arcCompletion;
 }

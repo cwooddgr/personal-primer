@@ -44,33 +44,22 @@ async function fetchAPI<T>(
   return data;
 }
 
-// Tone types
-export type ToneId = 'reflective' | 'guided' | 'inquiry' | 'practical' | 'direct';
+// Types (matching backend functions/src/types/index.ts)
 
-export interface ToneDefinition {
-  id: ToneId;
-  name: string;
-  shortName: string;
-  description: string;
+export interface Season {
+  id: string;
+  seasonNumber: number;
+  status: 'active' | 'completed';
 }
 
-export interface TonesResponse {
-  tones: ToneDefinition[];
-  default: ToneId;
-}
-
-export interface ToneChange {
-  messageIndex: number;
-  tone: ToneId;
-}
-
-// Types (matching backend)
 export interface Arc {
   id: string;
+  seasonId: string;
+  orderInSeason: number; // 1-12
+  status: 'planned' | 'active' | 'completed';
   theme: string;
   description: string;
-  shortDescription?: string; // One-sentence summary for UI display (optional for backwards compat)
-  currentPhase: 'early' | 'middle' | 'late';
+  shortDescription: string; // One-sentence summary for UI display
   targetDurationDays: number;
 }
 
@@ -86,18 +75,18 @@ export interface ArcCompletionData {
     theme: string;
     description: string;
     shortDescription: string;
-  };
+  } | null;
 }
 
 export interface DailyBundle {
   id: string;
   arcId: string;
+  dayInArc: number; // 1-7
+  engaged: boolean;
   music: {
     title: string;
     artist: string;
-    composer?: string;   // For classical: the composer
-    performer?: string;  // For classical: the performer
-    appleMusicUrl: string;
+    youtubeUrl: string;
   };
   image: {
     title: string;
@@ -112,7 +101,6 @@ export interface DailyBundle {
     author: string;
   };
   framingText: string;
-  tone?: ToneId;
   suggestedReading?: SuggestedReading;
 }
 
@@ -126,8 +114,6 @@ export interface Conversation {
   bundleId: string;
   messages: ConversationMessage[];
   sessionEnded: boolean;
-  initialTone?: ToneId;
-  toneChanges?: ToneChange[];
 }
 
 export interface TodayResponse {
@@ -135,7 +121,6 @@ export interface TodayResponse {
   conversation: Conversation | null;
   arc: Arc;
   dayInArc: number;
-  currentTone: ToneId;
 }
 
 export interface MessageResponse {
@@ -143,7 +128,6 @@ export interface MessageResponse {
   conversation: Conversation;
   sessionShouldEnd?: boolean;
   arcShouldEnd?: boolean;
-  incompleteMessageDetected?: boolean;
 }
 
 export interface EndSessionResponse {
@@ -152,51 +136,69 @@ export interface EndSessionResponse {
   arcCompletion?: ArcCompletionData;
 }
 
-// Helper to get local date in YYYY-MM-DD format
-function getLocalDate(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+export interface SeasonResponse {
+  season: Season;
+  arcs: Arc[];
+}
+
+export interface SeasonSteerMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface SeasonSteerResponse {
+  response: string;
+  season?: Season;
+  arcs?: Arc[];
 }
 
 // API functions
+
 export async function getToday(): Promise<TodayResponse> {
-  const localDate = getLocalDate();
-  return fetchAPI<TodayResponse>(`/today?date=${localDate}`);
+  return fetchAPI<TodayResponse>('/today');
 }
 
-export async function sendMessage(message: string, forceComplete?: boolean): Promise<MessageResponse> {
-  const localDate = getLocalDate();
+export async function sendMessage(
+  message: string,
+  bundleId?: string
+): Promise<MessageResponse> {
   return fetchAPI<MessageResponse>('/today/message', {
     method: 'POST',
-    body: JSON.stringify({ message, date: localDate, forceComplete }),
+    body: JSON.stringify({ message, bundleId }),
   });
 }
 
-export async function endSession(): Promise<EndSessionResponse> {
-  const localDate = getLocalDate();
+export async function endSession(bundleId?: string): Promise<EndSessionResponse> {
   return fetchAPI<EndSessionResponse>('/today/end-session', {
     method: 'POST',
-    body: JSON.stringify({ date: localDate }),
+    body: JSON.stringify({ bundleId }),
   });
 }
 
-export async function recordReaction(
-  reactionType: 'awe' | 'interest' | 'resistance' | 'familiarity' | 'freeform',
-  artifactType?: 'music' | 'image' | 'text' | 'overall',
-  notes?: string
-): Promise<void> {
-  return fetchAPI<void>('/today/react', {
+export async function endArcEarly(bundleId?: string): Promise<EndSessionResponse> {
+  return fetchAPI<EndSessionResponse>('/arc/end-early', {
     method: 'POST',
-    body: JSON.stringify({ reactionType, artifactType, notes }),
+    body: JSON.stringify({ bundleId }),
   });
 }
 
-export async function getArc(): Promise<{ arc: Arc; dayInArc: number }> {
-  return fetchAPI<{ arc: Arc; dayInArc: number }>('/arc');
+// Season
+
+export async function getSeason(): Promise<SeasonResponse> {
+  return fetchAPI<SeasonResponse>('/season');
 }
+
+export async function sendSeasonSteerMessage(
+  message: string,
+  conversationHistory: SeasonSteerMessage[]
+): Promise<SeasonSteerResponse> {
+  return fetchAPI<SeasonSteerResponse>('/season/steer/message', {
+    method: 'POST',
+    body: JSON.stringify({ message, conversationHistory }),
+  });
+}
+
+// History
 
 export interface ArcSummary {
   id: string;
@@ -240,41 +242,9 @@ export interface ConversationHistoryResponse {
 }
 
 export async function getConversationHistory(
-  date: string
+  bundleId: string
 ): Promise<ConversationHistoryResponse> {
-  return fetchAPI<ConversationHistoryResponse>(`/history/${date}/conversation`);
-}
-
-export interface ArcRefinementMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-export interface ArcRefinementResponse {
-  response: string;
-  arcUpdated?: {
-    theme: string;
-    description: string;
-    shortDescription: string;
-  };
-}
-
-export async function endArcEarly(): Promise<EndSessionResponse> {
-  const localDate = getLocalDate();
-  return fetchAPI<EndSessionResponse>('/arc/end-early', {
-    method: 'POST',
-    body: JSON.stringify({ date: localDate }),
-  });
-}
-
-export async function sendArcRefinementMessage(
-  message: string,
-  conversationHistory: ArcRefinementMessage[]
-): Promise<ArcRefinementResponse> {
-  return fetchAPI<ArcRefinementResponse>('/arc/refine/message', {
-    method: 'POST',
-    body: JSON.stringify({ message, conversationHistory }),
-  });
+  return fetchAPI<ConversationHistoryResponse>(`/history/${bundleId}/conversation`);
 }
 
 // Auth API functions (no auth token required for these)
@@ -325,8 +295,7 @@ export async function resendVerification(): Promise<{ success: boolean; message:
 // User profile API functions
 export interface UserProfileResponse {
   hasSeenAbout: boolean;
-  currentTone: ToneId;
-  hasSelectedTone: boolean;
+  voicePreference: string | null;
 }
 
 export async function getUserProfile(): Promise<UserProfileResponse> {
@@ -336,27 +305,5 @@ export async function getUserProfile(): Promise<UserProfileResponse> {
 export async function markAboutAsSeen(): Promise<{ success: boolean }> {
   return fetchAPI<{ success: boolean }>('/user/mark-about-seen', {
     method: 'POST',
-  });
-}
-
-// Tone API functions
-export async function getTones(): Promise<TonesResponse> {
-  return fetchAPI<TonesResponse>('/tones');
-}
-
-export async function setDefaultTone(tone: ToneId): Promise<{ success: boolean; tone: ToneId }> {
-  return fetchAPI<{ success: boolean; tone: ToneId }>('/user/tone', {
-    method: 'POST',
-    body: JSON.stringify({ tone }),
-  });
-}
-
-export async function changeToneMidConversation(
-  tone: ToneId
-): Promise<{ success: boolean; tone: ToneId; messageIndex: number }> {
-  const localDate = getLocalDate();
-  return fetchAPI<{ success: boolean; tone: ToneId; messageIndex: number }>('/today/tone', {
-    method: 'POST',
-    body: JSON.stringify({ tone, date: localDate }),
   });
 }

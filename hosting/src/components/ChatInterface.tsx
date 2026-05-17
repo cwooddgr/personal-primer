@@ -1,20 +1,17 @@
 import { useState, useRef, useEffect } from 'react';
 import Markdown from 'react-markdown';
-import { sendMessage, endSession, endArcEarly, sendArcRefinementMessage, changeToneMidConversation, Conversation, ConversationMessage, SuggestedReading, ArcCompletionData, ArcRefinementMessage, ToneId, ToneDefinition, ToneChange } from '../api/client';
-import ToneSelector from './ToneSelector';
+import { sendMessage, endSession, endArcEarly, Conversation, ConversationMessage, SuggestedReading, ArcCompletionData } from '../api/client';
 
 interface ChatInterfaceProps {
   initialConversation: Conversation | null;
   sessionEnded: boolean;
+  bundleId?: string;
   initialSuggestedReading?: SuggestedReading;
   initialArcCompletion?: ArcCompletionData;
   forceSessionEnded?: boolean;
-  tones: ToneDefinition[];
-  currentTone: ToneId;
-  onToneChange: (tone: ToneId) => void;
 }
 
-function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded, initialSuggestedReading, initialArcCompletion, forceSessionEnded, tones, currentTone, onToneChange }: ChatInterfaceProps) {
+function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded, bundleId, initialSuggestedReading, initialArcCompletion, forceSessionEnded }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<ConversationMessage[]>(
     initialConversation?.messages || []
   );
@@ -23,17 +20,8 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
   const [sessionEnded, setSessionEnded] = useState(initialSessionEnded);
   const [ending, setEnding] = useState(false);
   const [suggestedReading, setSuggestedReading] = useState<SuggestedReading | undefined>(initialSuggestedReading);
-  const [arcCompletion, setArcCompletion] = useState<ArcCompletionData | undefined>();
-  const [refiningArc, setRefiningArc] = useState(false);
-  const [refinementMessages, setRefinementMessages] = useState<ArcRefinementMessage[]>([]);
-  const [incompletePrompt, setIncompletePrompt] = useState<string | null>(null);
-  const [pendingIncompleteMessage, setPendingIncompleteMessage] = useState<string | null>(null);
-  const [toneChanges, setToneChanges] = useState<ToneChange[]>(
-    initialConversation?.toneChanges || []
-  );
-  const [changingTone, setChangingTone] = useState(false);
+  const [arcCompletion, setArcCompletion] = useState<ArcCompletionData | undefined>(initialArcCompletion);
 
-  const refinementRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const suggestedReadingRef = useRef<HTMLDivElement>(null);
   const arcCompletionRef = useRef<HTMLDivElement>(null);
@@ -82,101 +70,39 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
     }
   }, [suggestedReading, arcCompletion]);
 
-  // Auto-scroll to refinement section when it appears
-  useEffect(() => {
-    if (refiningArc && refinementRef.current) {
-      refinementRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, [refiningArc]);
-
-  // Auto-scroll to new refinement messages
-  useEffect(() => {
-    if (refiningArc && refinementMessages.length > 0 && refinementRef.current) {
-      // Scroll to show the latest message in the refinement section
-      const messagesContainer = refinementRef.current.querySelector('.messages');
-      if (messagesContainer) {
-        const lastMessage = messagesContainer.lastElementChild;
-        lastMessage?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      }
-    }
-  }, [refinementMessages, refiningArc]);
-
-  const handleToneChange = async (newTone: ToneId) => {
-    if (newTone === currentTone || changingTone || sessionEnded) return;
-
-    console.log('[ChatInterface] Changing tone to:', newTone);
-    setChangingTone(true);
-
-    try {
-      const response = await changeToneMidConversation(newTone);
-      console.log('[ChatInterface] Tone changed:', response);
-
-      // Add the tone change to our list
-      setToneChanges((prev) => [...prev, { messageIndex: response.messageIndex, tone: newTone }]);
-      onToneChange(newTone);
-    } catch (error) {
-      console.error('[ChatInterface] Tone change failed:', error);
-    } finally {
-      setChangingTone(false);
-    }
-  };
-
-  // Helper to get tone name by ID
-  const getToneName = (toneId: ToneId): string => {
-    const tone = tones.find(t => t.id === toneId);
-    return tone?.shortName || toneId;
-  };
-
-  const handleSend = async (forceComplete = false) => {
+  const handleSend = async () => {
     if (!input.trim() || sending || sessionEnded) {
       console.log('[ChatInterface] handleSend blocked:', { empty: !input.trim(), sending, sessionEnded });
       return;
     }
 
     const userMessage = input.trim();
-    // If we're resending while incomplete prompt is showing, force complete
-    const shouldForceComplete = forceComplete || (incompletePrompt !== null && pendingIncompleteMessage !== null);
-
-    console.log('[ChatInterface] Sending message:', userMessage.substring(0, 50) + (userMessage.length > 50 ? '...' : ''), { forceComplete: shouldForceComplete });
+    console.log('[ChatInterface] Sending message:', userMessage.substring(0, 50) + (userMessage.length > 50 ? '...' : ''));
     setInput('');
     setSending(true);
-    setIncompletePrompt(null);
-    setPendingIncompleteMessage(null);
 
     // Optimistically add user message
     setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
 
     try {
-      const response = await sendMessage(userMessage, shouldForceComplete);
+      const response = await sendMessage(userMessage, bundleId);
       console.log('[ChatInterface] Message response:', {
         messageCount: response.conversation.messages.length,
         sessionShouldEnd: response.sessionShouldEnd,
-        incompleteMessageDetected: response.incompleteMessageDetected,
+        arcShouldEnd: response.arcShouldEnd,
       });
-
-      // Handle incomplete message detection
-      if (response.incompleteMessageDetected) {
-        console.log('[ChatInterface] Incomplete message detected, restoring input');
-        // Remove the optimistic message
-        setMessages((prev) => prev.slice(0, -1));
-        // Restore the text to the input field
-        setInput(userMessage);
-        // Store the pending message and show the prompt
-        setPendingIncompleteMessage(userMessage);
-        setIncompletePrompt(response.response);
-        setSending(false);
-        return;
-      }
 
       setMessages(response.conversation.messages);
 
-      // Auto-end session (or arc) if Claude detected user wants to end
+      // Auto-end session (or arc) if the guide signalled a natural close
       if (response.sessionShouldEnd) {
         const isArcEnd = response.arcShouldEnd;
         console.log(`[ChatInterface] Auto-ending ${isArcEnd ? 'arc' : 'session'}`);
         setEnding(true);
         try {
-          const endResponse = isArcEnd ? await endArcEarly() : await endSession();
+          const endResponse = isArcEnd
+            ? await endArcEarly(bundleId)
+            : await endSession(bundleId);
           console.log('[ChatInterface] Auto-end success:', {
             hasSuggestedReading: !!endResponse.suggestedReading,
             hasArcCompletion: !!endResponse.arcCompletion,
@@ -212,7 +138,7 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
     console.log('[ChatInterface] Ending session manually...');
     setEnding(true);
     try {
-      const response = await endSession();
+      const response = await endSession(bundleId);
       console.log('[ChatInterface] End session success:', {
         hasSuggestedReading: !!response.suggestedReading,
         hasArcCompletion: !!response.arcCompletion,
@@ -231,99 +157,6 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
     }
   };
 
-  const handleStartRefinement = () => {
-    console.log('[ChatInterface] Starting arc refinement');
-    setRefiningArc(true);
-    // Add initial assistant message
-    setRefinementMessages([{
-      role: 'assistant',
-      content: "I'd love to help you find a theme that feels right. What kind of territory would you like to explore? Is there something specific that's been on your mind, or would you prefer I suggest some alternatives?",
-    }]);
-  };
-
-  const handleSendRefinement = async () => {
-    if (!input.trim() || sending) return;
-
-    const userMessage = input.trim();
-    console.log('[ChatInterface] Sending refinement message:', userMessage.substring(0, 50));
-    setInput('');
-    setSending(true);
-
-    // Optimistically add user message
-    const updatedMessages: ArcRefinementMessage[] = [...refinementMessages, { role: 'user', content: userMessage }];
-    setRefinementMessages(updatedMessages);
-
-    try {
-      const response = await sendArcRefinementMessage(userMessage, refinementMessages);
-      console.log('[ChatInterface] Refinement response:', {
-        hasArcUpdated: !!response.arcUpdated,
-      });
-
-      // Add assistant response
-      setRefinementMessages([...updatedMessages, { role: 'assistant', content: response.response }]);
-
-      // If arc was updated, update the display and exit refinement mode
-      if (response.arcUpdated && arcCompletion) {
-        setArcCompletion({
-          ...arcCompletion,
-          nextArc: response.arcUpdated,
-        });
-        setRefiningArc(false);
-        setRefinementMessages([]);
-      }
-    } catch (error) {
-      console.error('[ChatInterface] Refinement message failed:', error);
-      // Remove optimistic message on error
-      setRefinementMessages(refinementMessages);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleCancelRefinement = () => {
-    setRefiningArc(false);
-    setRefinementMessages([]);
-    setInput('');
-  };
-
-  // Render messages with tone change dividers
-  const renderMessagesWithDividers = () => {
-    const elements: React.ReactNode[] = [];
-
-    // Build a map of messageIndex -> tone change
-    const toneChangeMap = new Map<number, ToneId>();
-    for (const tc of toneChanges) {
-      toneChangeMap.set(tc.messageIndex, tc.tone);
-    }
-
-    for (let index = 0; index < messages.length; index++) {
-      // Check if there's a tone change before this message
-      if (toneChangeMap.has(index)) {
-        const newTone = toneChangeMap.get(index)!;
-        elements.push(
-          <div key={`tone-change-${index}`} className="tone-change-marker">
-            <span>Switched to {getToneName(newTone)}</span>
-          </div>
-        );
-      }
-
-      const msg = messages[index];
-      elements.push(
-        <div key={index} className={`message ${msg.role}`}>
-          <div className="message-content">
-            {msg.role === 'assistant' ? (
-              <Markdown>{msg.content}</Markdown>
-            ) : (
-              msg.content
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    return elements;
-  };
-
   return (
     <section className="chat-interface">
       <h2>Conversation</h2>
@@ -335,7 +168,17 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
       )}
 
       <div className="messages">
-        {renderMessagesWithDividers()}
+        {messages.map((msg, index) => (
+          <div key={index} className={`message ${msg.role}`}>
+            <div className="message-content">
+              {msg.role === 'assistant' ? (
+                <Markdown>{msg.content}</Markdown>
+              ) : (
+                msg.content
+              )}
+            </div>
+          </div>
+        ))}
         {sending && (
           <div className="message assistant">
             <div className="message-content typing">Thinking</div>
@@ -354,16 +197,13 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
                 <p className="arc-completion-label">Arc Complete</p>
                 <Markdown>{arcCompletion.summary}</Markdown>
               </div>
-              <div className="next-arc-preview">
-                <p className="next-arc-label">Coming tomorrow</p>
-                <p className="next-arc-theme">{arcCompletion.nextArc.theme}</p>
-                <p className="next-arc-description">{arcCompletion.nextArc.description}</p>
-                {!refiningArc && (
-                  <button onClick={handleStartRefinement} className="change-arc-link">
-                    Change
-                  </button>
-                )}
-              </div>
+              {arcCompletion.nextArc && (
+                <div className="next-arc-preview">
+                  <p className="next-arc-label">Coming tomorrow</p>
+                  <p className="next-arc-theme">{arcCompletion.nextArc.theme}</p>
+                  <p className="next-arc-description">{arcCompletion.nextArc.description}</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -376,116 +216,41 @@ function ChatInterface({ initialConversation, sessionEnded: initialSessionEnded,
               <p className="suggested-reading-rationale">{suggestedReading.rationale}</p>
             </div>
           )}
-
-          {refiningArc && (
-            <div className="arc-refinement" ref={refinementRef}>
-              <div className="messages">
-                {refinementMessages.map((msg, index) => (
-                  <div key={index} className={`message ${msg.role}`}>
-                    <div className="message-content">
-                      {msg.role === 'assistant' ? (
-                        <Markdown>{msg.content}</Markdown>
-                      ) : (
-                        msg.content
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {sending && (
-                  <div className="message assistant">
-                    <div className="message-content typing">Thinking</div>
-                  </div>
-                )}
-              </div>
-              <div className="chat-input-area">
-                <textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                      e.preventDefault();
-                      if (input.trim() && !sending) {
-                        handleSendRefinement();
-                      }
-                    }
-                  }}
-                  placeholder="Describe what you'd prefer..."
-                  disabled={sending}
-                  rows={2}
-                />
-                <div className="chat-actions">
-                  <button onClick={handleSendRefinement} disabled={!input.trim() || sending}>
-                    Send
-                  </button>
-                  <button onClick={handleCancelRefinement} className="end-session">
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       ) : ending ? (
         <div className="chat-input-area">
           <p className="ending-message">Ending session</p>
         </div>
       ) : (
-        <>
-          {incompletePrompt && (
-            <div className="incomplete-prompt">
-              <p>
-                It looks like your message may have been cut off. Continue typing, or click{' '}
-                <button
-                  type="button"
-                  className="complete-link"
-                  onClick={() => handleSend(true)}
-                  disabled={sending}
-                >
-                  send as-is
-                </button>
-                {' '}if that was complete.
-              </p>
-            </div>
-          )}
-          <div className="chat-input-area">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault();
-                  if (input.trim() && !sending) {
-                    handleSend();
-                  }
+        <div className="chat-input-area">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                if (input.trim() && !sending) {
+                  handleSend();
                 }
-              }}
-              placeholder="Type your message..."
-              disabled={sending}
-              rows={2}
-            />
-            <div className="chat-actions">
-              <button onClick={() => handleSend()} disabled={!input.trim() || sending}>
-                Send
-              </button>
-              <button
-                onClick={handleEndSession}
-                disabled={messages.length === 0}
-                className="end-session"
-              >
-                End Session
-              </button>
-              {tones.length > 0 && (
-                <ToneSelector
-                  tones={tones}
-                  currentTone={currentTone}
-                  onSelect={handleToneChange}
-                  disabled={changingTone || sending}
-                  compact
-                />
-              )}
-            </div>
+              }
+            }}
+            placeholder="Type your message..."
+            disabled={sending}
+            rows={2}
+          />
+          <div className="chat-actions">
+            <button onClick={handleSend} disabled={!input.trim() || sending}>
+              Send
+            </button>
+            <button
+              onClick={handleEndSession}
+              disabled={messages.length === 0}
+              className="end-session"
+            >
+              End Session
+            </button>
           </div>
-        </>
+        </div>
       )}
     </section>
   );

@@ -123,19 +123,6 @@ export interface UserMemoryProfile {
 }
 
 // ---------------------------------------------------------------------------
-// Reactions
-// ---------------------------------------------------------------------------
-
-export interface UserReaction {
-  id: string;
-  date: Timestamp;
-  bundleId: string;
-  artifactType?: 'music' | 'image' | 'text' | 'overall';
-  reactionType: 'awe' | 'interest' | 'resistance' | 'familiarity' | 'freeform';
-  notes?: string;
-}
-
-// ---------------------------------------------------------------------------
 // LLM response types
 // ---------------------------------------------------------------------------
 
@@ -197,12 +184,6 @@ export interface MessageResponse {
   conversation: Conversation;
   sessionShouldEnd?: boolean;
   arcShouldEnd?: boolean;
-}
-
-export interface ReactRequest {
-  artifactType?: 'music' | 'image' | 'text' | 'overall';
-  reactionType: 'awe' | 'interest' | 'resistance' | 'familiarity' | 'freeform';
-  notes?: string;
 }
 
 export interface ArcCompletionData {

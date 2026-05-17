@@ -5,7 +5,6 @@ import { anthropicApiKey } from './services/anthropic';
 import { handleGetToday } from './api/today';
 import { handlePostMessage } from './api/message';
 import { handleEndSession } from './api/endSession';
-import { handleReact } from './api/react';
 import { handleGetHistory } from './api/history';
 import { handleGetConversation } from './api/conversationHistory';
 import { handleEndArcEarly } from './api/endArcEarly';
@@ -73,10 +72,6 @@ export const api = onRequest(
 
     if (path === '/api/today/end-session' && method === 'POST') {
       return handleEndSession(req, res, userId);
-    }
-
-    if (path === '/api/today/react' && method === 'POST') {
-      return handleReact(req, res, userId);
     }
 
     // Season

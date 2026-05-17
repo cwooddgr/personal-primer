@@ -8,7 +8,6 @@ import {
   Exposure,
   Conversation,
   SessionInsights,
-  UserReaction,
   UserMemoryProfile,
   ARC_DURATION_DAYS,
   ArcPhase,
@@ -31,7 +30,6 @@ function getUserCollections(userId: string) {
     exposures: userDoc.collection('exposures'),
     conversations: userDoc.collection('conversations'),
     sessionInsights: userDoc.collection('sessionInsights'),
-    userReactions: userDoc.collection('userReactions'),
   };
 }
 
@@ -633,14 +631,3 @@ export async function createSessionInsights(
   await collections.sessionInsights.doc(insights.id).set(insights);
 }
 
-// ---------------------------------------------------------------------------
-// Reactions
-// ---------------------------------------------------------------------------
-
-export async function createReaction(
-  userId: string,
-  reaction: Omit<UserReaction, 'id'>
-): Promise<void> {
-  const collections = getUserCollections(userId);
-  await collections.userReactions.add(reaction);
-}

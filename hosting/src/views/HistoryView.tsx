@@ -53,13 +53,15 @@ function HistoryView() {
             <p className="history-arc-description">{group.arc.description}</p>
           )}
           <ul className="history-list">
-            {[...group.bundles].reverse().map((bundle, index) => {
-              // Display chronologically: day 1 first
-              const dayInArc = index + 1;
+            {[...group.bundles]
+              .sort((a, b) => (a.dayInArc || 0) - (b.dayInArc || 0))
+              .map((bundle, index) => {
+              // Display chronologically: day 1 first. Fall back to position
+              // for legacy bundles without a dayInArc field.
+              const dayInArc = bundle.dayInArc || index + 1;
               return (
                 <li key={bundle.id} className="history-item">
                   <span className="history-date">
-                    {bundle.id}
                     <span className="history-day-badge">Day {dayInArc}</span>
                   </span>
                   <div className="history-summary">

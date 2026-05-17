@@ -4,12 +4,10 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, User, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import TodayView from './views/TodayView';
 import HistoryView from './views/HistoryView';
-import ArcView from './views/ArcView';
+import CourseView from './views/CourseView';
 import ConversationHistoryView from './views/ConversationHistoryView';
 import AboutView from './views/AboutView';
-import ToneSelectionView from './views/ToneSelectionView';
-import PreferencesView from './views/PreferencesView';
-import { register, forgotPassword, getUserProfile, markAboutAsSeen as markAboutAsSeenAPI, ToneId } from './api/client';
+import { register, forgotPassword, getUserProfile, markAboutAsSeen as markAboutAsSeenAPI } from './api/client';
 
 // Firebase config - replace with your project's config
 const firebaseConfig = {
@@ -225,9 +223,7 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAboutFirst, setShowAboutFirst] = useState(false);
-  const [showToneSelection, setShowToneSelection] = useState(false);
   const [profileChecked, setProfileChecked] = useState(false);
-  const [showPreferences, setShowPreferences] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -235,9 +231,7 @@ function App() {
       setLoading(false);
       if (!user) {
         setShowAboutFirst(false);
-        setShowToneSelection(false);
         setProfileChecked(false);
-        setShowPreferences(false);
       }
     });
     return () => unsubscribe();
@@ -252,11 +246,7 @@ function App() {
         const profile = await getUserProfile();
         if (!profile.hasSeenAbout) {
           setShowAboutFirst(true);
-          setShowToneSelection(!profile.hasSelectedTone);
           await markAboutAsSeenAPI();
-        } else if (!profile.hasSelectedTone) {
-          // User has seen About but hasn't selected tone (existing user)
-          setShowToneSelection(true);
         }
       } catch (err) {
         console.error('[App] Failed to check profile:', err);
@@ -270,11 +260,6 @@ function App() {
 
   const handleGetStarted = () => {
     setShowAboutFirst(false);
-    // If tone selection is pending, it will show next
-  };
-
-  const handleToneSelected = (_tone: ToneId) => {
-    setShowToneSelection(false);
   };
 
   const handleLogout = async () => {
@@ -310,41 +295,16 @@ function App() {
     );
   }
 
-  // Show tone selection for users who haven't selected one
-  if (showToneSelection) {
-    return (
-      <div className="app">
-        <main className="main">
-          <ToneSelectionView onComplete={handleToneSelected} />
-        </main>
-      </div>
-    );
-  }
-
-  // Show preferences page
-  if (showPreferences) {
-    return (
-      <div className="app">
-        <main className="main">
-          <PreferencesView onBack={() => setShowPreferences(false)} />
-        </main>
-      </div>
-    );
-  }
-
   return (
     <div className="app">
       <nav className="nav">
         <div className="nav-links">
           <a href="/">Today</a>
-          <a href="/arc">Arc</a>
+          <a href="/course">Course</a>
           <a href="/history">History</a>
         </div>
         <div className="nav-right">
           <a href="/about">About</a>
-          <button className="link-button" onClick={() => setShowPreferences(true)}>
-            Preferences
-          </button>
           <button className="logout-link" onClick={handleLogout}>
             Logout
           </button>
@@ -354,9 +314,9 @@ function App() {
       <main className="main">
         <Routes>
           <Route path="/" element={<TodayView />} />
-          <Route path="/arc" element={<ArcView />} />
+          <Route path="/course" element={<CourseView />} />
           <Route path="/history" element={<HistoryView />} />
-          <Route path="/history/:date/conversation" element={<ConversationHistoryView />} />
+          <Route path="/history/:bundleId/conversation" element={<ConversationHistoryView />} />
           <Route path="/about" element={<AboutView />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { getToday, getTones, endArcEarly, TodayResponse, ToneDefinition, ToneId, ArcCompletionData, SuggestedReading } from '../api/client';
+import { getToday, endArcEarly, TodayResponse, ArcCompletionData, SuggestedReading } from '../api/client';
 import MusicCard from '../components/MusicCard';
 import ImageCard from '../components/ImageCard';
 import TextCard from '../components/TextCard';
@@ -11,8 +11,6 @@ function TodayView() {
   const [data, setData] = useState<TodayResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
-  const [tones, setTones] = useState<ToneDefinition[]>([]);
-  const [currentTone, setCurrentTone] = useState<ToneId>('guided');
   const [endingArc, setEndingArc] = useState(false);
   const [arcCompletion, setArcCompletion] = useState<ArcCompletionData | undefined>();
   const [arcEndSuggestedReading, setArcEndSuggestedReading] = useState<SuggestedReading | undefined>();
@@ -23,21 +21,15 @@ function TodayView() {
     setLoading(true);
     setError(null);
     try {
-      const [todayResponse, tonesResponse] = await Promise.all([
-        getToday(),
-        getTones(),
-      ]);
+      const todayResponse = await getToday();
       console.log('[TodayView] Loaded successfully:', {
         bundleId: todayResponse.bundle.id,
         arcTheme: todayResponse.arc.theme,
         hasConversation: !!todayResponse.conversation,
         messageCount: todayResponse.conversation?.messages.length ?? 0,
         sessionEnded: todayResponse.conversation?.sessionEnded ?? false,
-        currentTone: todayResponse.currentTone,
       });
       setData(todayResponse);
-      setTones(tonesResponse.tones);
-      setCurrentTone(todayResponse.currentTone);
     } catch (err) {
       console.error('[TodayView] Load failed:', err);
       setError(err);
@@ -62,13 +54,15 @@ function TodayView() {
     return <div className="error-message">No data available</div>;
   }
 
+  const { bundle, conversation, arc, dayInArc } = data;
+
   const handleEndArcEarly = async () => {
     if (endingArc) return;
     if (!window.confirm('End this arc and move to a new theme?')) return;
 
     setEndingArc(true);
     try {
-      const response = await endArcEarly();
+      const response = await endArcEarly(bundle.id);
       if (response.arcCompletion) {
         setArcCompletion(response.arcCompletion);
       }
@@ -83,7 +77,6 @@ function TodayView() {
     }
   };
 
-  const { bundle, conversation, arc, dayInArc } = data;
   const isLastDay = dayInArc >= arc.targetDurationDays;
 
   return (
@@ -113,7 +106,7 @@ function TodayView() {
         <MusicCard
           title={bundle.music.title}
           artist={bundle.music.artist}
-          appleMusicUrl={bundle.music.appleMusicUrl}
+          youtubeUrl={bundle.music.youtubeUrl}
         />
 
         <ImageCard
@@ -136,12 +129,10 @@ function TodayView() {
       <ChatInterface
         initialConversation={conversation}
         sessionEnded={conversation?.sessionEnded ?? false}
+        bundleId={bundle.id}
         initialSuggestedReading={arcEndSuggestedReading || bundle.suggestedReading}
         initialArcCompletion={arcCompletion}
         forceSessionEnded={arcEndedSessionEarly}
-        tones={tones}
-        currentTone={currentTone}
-        onToneChange={setCurrentTone}
       />
     </div>
   );

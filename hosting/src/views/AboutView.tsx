@@ -81,20 +81,10 @@ function AboutView({ isFirstTime = false, onGetStarted }: AboutViewProps) {
         <div className="about-subsection">
           <h3>Your Guide</h3>
           <p>
-            You can choose how your guide communicates with you. Some prefer a
-            Socratic approach full of questions; others want direct, no-nonsense
-            responses. The five voices available are:
-          </p>
-          <ul>
-            <li><strong>The Tutor</strong> — Balanced explanation with gentle questions (default)</li>
-            <li><strong>The Listener</strong> — Reflective and emotionally attuned, creating space for you to process</li>
-            <li><strong>The Questioner</strong> — Socratic method, drawing out your own thinking through inquiry</li>
-            <li><strong>The Craft Mentor</strong> — Practical and concrete, focused on how ideas apply</li>
-            <li><strong>The Editor</strong> — Direct and efficient, no hand-holding</li>
-          </ul>
-          <p>
-            You can change your guide anytime in Preferences, or even switch
-            mid-conversation if the mood strikes.
+            Your guide adapts to how you like to think. If you'd prefer a more
+            Socratic approach, a warmer register, or something direct and
+            no-nonsense, just say so in conversation—the guide will remember
+            and carry that voice forward.
           </p>
         </div>
       </section>
@@ -116,7 +106,7 @@ function AboutView({ isFirstTime = false, onGetStarted }: AboutViewProps) {
         <h2>Getting Around</h2>
         <ul>
           <li><strong>Today</strong> — Your current day's encounter</li>
-          <li><strong>Arc</strong> — Information about your current thematic journey</li>
+          <li><strong>Course</strong> — Your syllabus of upcoming themes, which you can steer</li>
           <li><strong>History</strong> — Review past encounters and conversations</li>
         </ul>
       </section>

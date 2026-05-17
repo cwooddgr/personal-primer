@@ -9,7 +9,8 @@ import {
   getRecentExposures,
   getVoicePreference,
   determinePhase,
-  toTimestamp,
+  fillBundleContent,
+  setBundleGenerationStatus,
 } from '../utils/firestore';
 import {
   chatWithWebSearch,
@@ -265,21 +266,31 @@ Find a working substitute for each failed artifact (keep the others) and verify 
 }
 
 /**
- * Generate a full bundle object (not persisted). Caller persists it.
+ * Generate content for an already-created pending bundle document and fill it
+ * in place. On success the bundle's generationStatus becomes 'ready'. On
+ * failure it becomes 'failed' and generationAttempts is incremented.
+ *
+ * Called by the `bundleGenerator` Firestore trigger — never by GET /api/today.
  */
-export async function buildBundle(
+export async function generateDailyBundle(
   userId: string,
-  bundleId: string,
-  arc: Arc,
-  dayInArc: number
-): Promise<DailyBundle> {
-  const content = await generateBundleContent(userId, arc, dayInArc);
-  return {
-    id: bundleId,
-    arcId: arc.id,
-    dayInArc,
-    engaged: false,
-    createdAt: toTimestamp(new Date()),
-    ...content,
-  };
+  bundle: DailyBundle,
+  arc: Arc
+): Promise<void> {
+  try {
+    const content = await generateBundleContent(userId, arc, bundle.dayInArc);
+    await fillBundleContent(userId, bundle.id, content);
+    console.log(
+      `[BundleGenerator] Bundle ${bundle.id} ready (arc "${arc.theme}" day ${bundle.dayInArc})`
+    );
+  } catch (err) {
+    console.error(
+      `[BundleGenerator] Generation failed for bundle ${bundle.id}:`,
+      err
+    );
+    await setBundleGenerationStatus(userId, bundle.id, 'failed', {
+      incrementAttempts: true,
+    });
+    throw err;
+  }
 }

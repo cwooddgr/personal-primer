@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { getToday, endArcEarly, TodayResponse, ArcCompletionData, SuggestedReading } from '../api/client';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { getToday, endArcEarly, TodayReadyResponse, ArcCompletionData, SuggestedReading } from '../api/client';
 import MusicCard from '../components/MusicCard';
 import ImageCard from '../components/ImageCard';
 import TextCard from '../components/TextCard';
@@ -7,43 +7,101 @@ import FramingText from '../components/FramingText';
 import ChatInterface from '../components/ChatInterface';
 import ErrorDisplay from '../components/ErrorDisplay';
 
+// How often to re-poll GET /api/today while the bundle is being generated.
+const POLL_INTERVAL_MS = 4000;
+
 function TodayView() {
-  const [data, setData] = useState<TodayResponse | null>(null);
+  const [data, setData] = useState<TodayReadyResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [endingArc, setEndingArc] = useState(false);
   const [arcCompletion, setArcCompletion] = useState<ArcCompletionData | undefined>();
   const [arcEndSuggestedReading, setArcEndSuggestedReading] = useState<SuggestedReading | undefined>();
   const [arcEndedSessionEarly, setArcEndedSessionEarly] = useState(false);
 
+  // Holds the active polling interval so it can be cleared on unmount / ready.
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current !== null) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
   const loadToday = useCallback(async () => {
     console.log('[TodayView] Loading today data...');
     setLoading(true);
     setError(null);
+    setFailed(false);
     try {
       const todayResponse = await getToday();
-      console.log('[TodayView] Loaded successfully:', {
-        bundleId: todayResponse.bundle.id,
-        arcTheme: todayResponse.arc.theme,
-        hasConversation: !!todayResponse.conversation,
-        messageCount: todayResponse.conversation?.messages.length ?? 0,
-        sessionEnded: todayResponse.conversation?.sessionEnded ?? false,
-      });
-      setData(todayResponse);
+
+      if (todayResponse.status === 'ready') {
+        console.log('[TodayView] Loaded successfully:', {
+          bundleId: todayResponse.bundle.id,
+          arcTheme: todayResponse.arc.theme,
+          hasConversation: !!todayResponse.conversation,
+          messageCount: todayResponse.conversation?.messages.length ?? 0,
+          sessionEnded: todayResponse.conversation?.sessionEnded ?? false,
+        });
+        stopPolling();
+        setData(todayResponse);
+        setGenerating(false);
+      } else if (todayResponse.status === 'failed') {
+        console.error('[TodayView] Bundle generation failed.');
+        stopPolling();
+        setData(null);
+        setGenerating(false);
+        setFailed(true);
+      } else {
+        // status === 'generating' — keep showing the loading state and poll.
+        console.log('[TodayView] Bundle is generating; polling...');
+        setData(null);
+        setGenerating(true);
+      }
     } catch (err) {
       console.error('[TodayView] Load failed:', err);
+      stopPolling();
       setError(err);
+      setGenerating(false);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [stopPolling]);
 
   useEffect(() => {
     loadToday();
-  }, [loadToday]);
+    return stopPolling;
+  }, [loadToday, stopPolling]);
 
-  if (loading) {
+  // While the bundle is generating, poll GET /api/today until it is ready.
+  useEffect(() => {
+    if (!generating) {
+      return;
+    }
+    if (pollRef.current !== null) {
+      return;
+    }
+    pollRef.current = setInterval(() => {
+      loadToday();
+    }, POLL_INTERVAL_MS);
+    return stopPolling;
+  }, [generating, loadToday, stopPolling]);
+
+  if (loading || generating) {
     return <div className="loading">Preparing today's encounter</div>;
+  }
+
+  if (failed) {
+    return (
+      <ErrorDisplay
+        error={"Today's encounter could not be prepared. Please try again."}
+        onRetry={loadToday}
+      />
+    );
   }
 
   if (error) {

@@ -44,12 +44,22 @@ export interface SuggestedReading {
   rationale: string;
 }
 
+export type BundleGenerationStatus =
+  | 'pending'
+  | 'generating'
+  | 'ready'
+  | 'failed';
+
 export interface DailyBundle {
-  id: string; // Auto-generated id; identity is (arcId, dayInArc)
+  id: string; // Deterministic id: `${arcId}-day${dayInArc}`
   arcId: string;
   dayInArc: number; // 1-7
   engaged: boolean; // True once the user sends their first message
   createdAt: Timestamp;
+  // Generation lifecycle. Artifact/framing fields may be empty/absent until
+  // generationStatus is 'ready'.
+  generationStatus: BundleGenerationStatus;
+  generationAttempts: number;
   music: {
     title: string;
     artist: string;
@@ -166,12 +176,16 @@ export interface LLMUserProfile {
 // API response types
 // ---------------------------------------------------------------------------
 
-export interface TodayResponse {
-  bundle: DailyBundle;
-  conversation: Conversation | null;
-  arc: Arc;
-  dayInArc: number;
-}
+export type TodayResponse =
+  | { status: 'generating' }
+  | {
+      status: 'ready';
+      bundle: DailyBundle;
+      conversation: Conversation | null;
+      arc: Arc;
+      dayInArc: number;
+    }
+  | { status: 'failed' };
 
 export interface MessageRequest {
   message: string;

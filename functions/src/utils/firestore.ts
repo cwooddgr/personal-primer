@@ -11,6 +11,7 @@ import {
   UserMemoryProfile,
   ARC_DURATION_DAYS,
   ArcPhase,
+  BundleGenerationStatus,
 } from '../types';
 
 // Initialize Firebase Admin if not already initialized
@@ -43,12 +44,6 @@ export const globalCollections = {
 // Date helpers
 // ---------------------------------------------------------------------------
 
-export function getTodayId(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
-    now.getDate()
-  ).padStart(2, '0')}`;
-}
 
 export function toTimestamp(date: Date): Timestamp {
   return Timestamp.fromDate(date);
@@ -271,9 +266,17 @@ export async function calculateDayInArc(userId: string, arc: Arc): Promise<numbe
   return Math.min(engaged + 1, arc.targetDurationDays);
 }
 
-export async function getBundle(userId: string, bundleId: string): Promise<DailyBundle | null> {
+/**
+ * Deterministic bundle id. Bundle identity is (arcId, dayInArc); the document
+ * id encodes both so an atomic `.create()` can serve as a concurrency lock.
+ */
+export function bundleId(arcId: string, dayInArc: number): string {
+  return `${arcId}-day${dayInArc}`;
+}
+
+export async function getBundle(userId: string, id: string): Promise<DailyBundle | null> {
   const collections = getUserCollections(userId);
-  const doc = await collections.dailyBundles.doc(bundleId).get();
+  const doc = await collections.dailyBundles.doc(id).get();
   if (!doc.exists) return null;
   return { id: doc.id, ...doc.data() } as DailyBundle;
 }
@@ -283,15 +286,71 @@ export async function getBundleByArcDay(
   arcId: string,
   dayInArc: number
 ): Promise<DailyBundle | null> {
+  return getBundle(userId, bundleId(arcId, dayInArc));
+}
+
+/**
+ * Atomically create a pending bundle document via Firestore `.create()`, which
+ * throws if the document already exists. That throw IS the concurrency lock:
+ * exactly one concurrent request can win the create. Artifact/framing fields
+ * start empty; a Firestore trigger fills them in out-of-band.
+ */
+export async function createPendingBundle(
+  userId: string,
+  arcId: string,
+  dayInArc: number
+): Promise<DailyBundle> {
   const collections = getUserCollections(userId);
-  const snapshot = await collections.dailyBundles
-    .where('arcId', '==', arcId)
-    .where('dayInArc', '==', dayInArc)
-    .limit(1)
-    .get();
-  if (snapshot.empty) return null;
-  const doc = snapshot.docs[0];
-  return { id: doc.id, ...doc.data() } as DailyBundle;
+  const id = bundleId(arcId, dayInArc);
+  const bundle: DailyBundle = {
+    id,
+    arcId,
+    dayInArc,
+    engaged: false,
+    createdAt: toTimestamp(new Date()),
+    generationStatus: 'pending',
+    generationAttempts: 0,
+    music: { title: '', artist: '', youtubeUrl: '' },
+    image: { title: '', sourceUrl: '', imageUrl: '' },
+    text: { content: '', source: '', author: '' },
+    framingText: '',
+  };
+  // .create() throws (code 6 / ALREADY_EXISTS) if the doc already exists.
+  await collections.dailyBundles.doc(id).create(bundle);
+  return bundle;
+}
+
+/**
+ * Reset a bundle back to `pending` so the Firestore trigger regenerates it.
+ * Refreshes `createdAt` to the current calendar day. Used for stale un-engaged
+ * bundles and for auto-retrying failed bundles.
+ */
+export async function resetBundleToPending(
+  userId: string,
+  id: string
+): Promise<void> {
+  const collections = getUserCollections(userId);
+  await collections.dailyBundles.doc(id).update({
+    generationStatus: 'pending',
+    createdAt: toTimestamp(new Date()),
+  });
+}
+
+/**
+ * Transition a bundle's generationStatus. Optionally bumps generationAttempts.
+ */
+export async function setBundleGenerationStatus(
+  userId: string,
+  id: string,
+  status: BundleGenerationStatus,
+  options: { incrementAttempts?: boolean } = {}
+): Promise<void> {
+  const collections = getUserCollections(userId);
+  const updates: Record<string, unknown> = { generationStatus: status };
+  if (options.incrementAttempts) {
+    updates.generationAttempts = admin.firestore.FieldValue.increment(1);
+  }
+  await collections.dailyBundles.doc(id).update(updates);
 }
 
 /**
@@ -317,6 +376,14 @@ export function isBundleStale(bundle: DailyBundle): boolean {
   return isFromPriorDay(bundle.createdAt);
 }
 
+// A bundle stuck mid-generation: still 'generating' well past the trigger's
+// 540s timeout (the trigger crashed/OOM'd before reaching ready/failed).
+const GENERATION_STUCK_MS = 12 * 60 * 1000;
+
+export function isBundleGenerationStuck(bundle: DailyBundle): boolean {
+  return Date.now() - bundle.createdAt.toMillis() > GENERATION_STUCK_MS;
+}
+
 /**
  * The most recently created bundle for an arc (engaged or not). Used for
  * session-end resolution after a bundle has already been engaged.
@@ -335,28 +402,22 @@ export async function getLatestBundleForArc(
   return bundles[0];
 }
 
-export async function createBundle(userId: string, bundle: DailyBundle): Promise<void> {
-  const collections = getUserCollections(userId);
-  await collections.dailyBundles.doc(bundle.id).set(bundle);
-}
-
 /**
- * Overwrite a bundle's artifact/framing content in place (same id, dayInArc).
+ * Fill a pending/generating bundle's artifact + framing content in place and
+ * mark it `ready`. Identity (id, arcId, dayInArc) is unchanged.
  */
-export async function replaceBundleContent(
+export async function fillBundleContent(
   userId: string,
-  bundleId: string,
-  content: Pick<DailyBundle, 'music' | 'image' | 'text' | 'framingText'> & {
-    createdAt: Timestamp;
-  }
+  id: string,
+  content: Pick<DailyBundle, 'music' | 'image' | 'text' | 'framingText'>
 ): Promise<void> {
   const collections = getUserCollections(userId);
-  await collections.dailyBundles.doc(bundleId).update({
+  await collections.dailyBundles.doc(id).update({
     music: content.music,
     image: content.image,
     text: content.text,
     framingText: content.framingText,
-    createdAt: content.createdAt,
+    generationStatus: 'ready',
   });
 }
 
@@ -385,7 +446,9 @@ export async function getBundleHistory(
 
   const bundles = snapshot.docs
     .map(doc => ({ id: doc.id, ...doc.data() } as DailyBundle & { status?: string }))
-    .filter(b => b.engaged === true || b.status === 'delivered');
+    .filter(b => b.engaged === true || b.status === 'delivered')
+    // Exclude bundles that never finished generating (no artifacts to show).
+    .filter(b => b.generationStatus === undefined || b.generationStatus === 'ready');
 
   return bundles.slice(0, limit);
 }

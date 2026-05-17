@@ -78,11 +78,19 @@ export interface ArcCompletionData {
   } | null;
 }
 
+export type BundleGenerationStatus =
+  | 'pending'
+  | 'generating'
+  | 'ready'
+  | 'failed';
+
 export interface DailyBundle {
   id: string;
   arcId: string;
   dayInArc: number; // 1-7
   engaged: boolean;
+  generationStatus?: BundleGenerationStatus;
+  generationAttempts?: number;
   music: {
     title: string;
     artist: string;
@@ -116,12 +124,18 @@ export interface Conversation {
   sessionEnded: boolean;
 }
 
-export interface TodayResponse {
-  bundle: DailyBundle;
-  conversation: Conversation | null;
-  arc: Arc;
-  dayInArc: number;
-}
+export type TodayResponse =
+  | { status: 'generating' }
+  | {
+      status: 'ready';
+      bundle: DailyBundle;
+      conversation: Conversation | null;
+      arc: Arc;
+      dayInArc: number;
+    }
+  | { status: 'failed' };
+
+export type TodayReadyResponse = Extract<TodayResponse, { status: 'ready' }>;
 
 export interface MessageResponse {
   response: string;

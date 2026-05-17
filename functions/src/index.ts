@@ -15,6 +15,7 @@ import {
   handleResendVerification,
 } from './api/auth';
 import { checkInactiveSessions } from './scheduled/inactivityCheck';
+import { bundleGenerator } from './triggers/bundleTrigger';
 import { verifyAuth } from './middleware/auth';
 import { ensureUserExists, getUserProfile, markAboutAsSeen } from './utils/firestore';
 
@@ -146,3 +147,6 @@ export const inactivityChecker = onSchedule(
     await checkInactiveSessions();
   }
 );
+
+// Firestore trigger: out-of-band daily-bundle generation.
+export { bundleGenerator };

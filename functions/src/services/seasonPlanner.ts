@@ -14,7 +14,41 @@ import {
   getMemoryProfile,
   toTimestamp,
 } from '../utils/firestore';
-import { generateJSON } from './anthropic';
+import { generateStructured, StructuredTool } from './anthropic';
+
+// Tool the model calls to submit the planned season.
+const PLAN_SEASON_TOOL: StructuredTool = {
+  name: 'plan_season',
+  description: `Submit the planned season: exactly ${ARCS_PER_SEASON} arcs in intended order.`,
+  input_schema: {
+    type: 'object',
+    properties: {
+      arcs: {
+        type: 'array',
+        description: `Exactly ${ARCS_PER_SEASON} arcs, in intended order.`,
+        items: {
+          type: 'object',
+          properties: {
+            theme: {
+              type: 'string',
+              description: 'A short evocative phrase, not a course title.',
+            },
+            description: {
+              type: 'string',
+              description: '2-3 sentences of scope and tone.',
+            },
+            shortDescription: {
+              type: 'string',
+              description: 'ONE sentence for UI display.',
+            },
+          },
+          required: ['theme', 'description', 'shortDescription'],
+        },
+      },
+    },
+    required: ['arcs'],
+  },
+};
 
 const SEASON_PLANNER_SYSTEM_PROMPT = `You are the curriculum planner for Personal Primer, a daily intellectual formation guide.
 
@@ -65,17 +99,7 @@ function buildSeasonPlanPrompt(
     }
   }
 
-  prompt += `Return as JSON:
-{
-  "arcs": [
-    {
-      "theme": "short evocative phrase",
-      "description": "2-3 sentences of scope and tone",
-      "shortDescription": "ONE sentence for UI display"
-    }
-    // ... exactly ${ARCS_PER_SEASON} arcs, in intended order
-  ]
-}`;
+  prompt += `When the season is ready, call the plan_season tool with exactly ${ARCS_PER_SEASON} arcs, in intended order.`;
 
   return prompt;
 }
@@ -108,9 +132,10 @@ export async function planNextSeason(userId: string): Promise<{
     `[SeasonPlanner] Planning season ${seasonNumber} for user ${userId} (${priorTopics.length} prior topics)`
   );
 
-  const plan = await generateJSON<LLMSeasonPlan>(
+  const plan = await generateStructured<LLMSeasonPlan>(
     SEASON_PLANNER_SYSTEM_PROMPT,
     buildSeasonPlanPrompt(seasonNumber, priorTopics, memoryProfile),
+    PLAN_SEASON_TOOL,
     8000
   );
 

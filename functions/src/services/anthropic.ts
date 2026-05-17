@@ -22,33 +22,6 @@ export interface ChatMessage {
 }
 
 /**
- * Simple text chat. Returns the concatenated text blocks of the reply.
- */
-export async function chat(
-  systemPrompt: string,
-  messages: ChatMessage[],
-  maxTokens: number = 2048
-): Promise<string> {
-  const anthropic = getClient();
-
-  const response = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: maxTokens,
-    system: systemPrompt,
-    messages: messages.map(m => ({
-      role: m.role,
-      content: m.content,
-    })),
-  });
-
-  const text = extractText(response.content);
-  if (!text) {
-    throw new Error('No text response from Claude');
-  }
-  return text;
-}
-
-/**
  * Concatenate all text blocks from a content array.
  */
 export function extractText(content: Anthropic.ContentBlock[]): string {
@@ -59,70 +32,45 @@ export function extractText(content: Anthropic.ContentBlock[]): string {
     .trim();
 }
 
-/**
- * Extract a JSON object/array from a string that may contain surrounding text
- * or markdown fences.
- */
-export function extractJSON<T>(raw: string): T {
-  let jsonStr = raw.trim();
+// ---------------------------------------------------------------------------
+// Structured output (tool-use)
+// ---------------------------------------------------------------------------
 
-  const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (codeBlockMatch) {
-    jsonStr = codeBlockMatch[1].trim();
-  } else {
-    const jsonStart = jsonStr.search(/[{[]/);
-    if (jsonStart !== -1) {
-      jsonStr = jsonStr.slice(jsonStart);
-      const openChar = jsonStr[0];
-      const closeChar = openChar === '{' ? '}' : ']';
-      let depth = 0;
-      let inString = false;
-      let escaped = false;
-      for (let i = 0; i < jsonStr.length; i++) {
-        const char = jsonStr[i];
-        if (escaped) {
-          escaped = false;
-          continue;
-        }
-        if (char === '\\' && inString) {
-          escaped = true;
-          continue;
-        }
-        if (char === '"') {
-          inString = !inString;
-          continue;
-        }
-        if (!inString) {
-          if (char === openChar) depth++;
-          if (char === closeChar) {
-            depth--;
-            if (depth === 0) {
-              jsonStr = jsonStr.slice(0, i + 1);
-              break;
-            }
-          }
-        }
-      }
-    }
-  }
-
-  return JSON.parse(jsonStr) as T;
+export interface StructuredTool {
+  name: string;
+  description: string;
+  input_schema: Anthropic.Tool.InputSchema;
 }
 
 /**
- * Plain JSON generation (no tools). Used for prompts that don't need web search.
+ * Generate structured output by forcing the model to emit exactly one tool
+ * call. The tool's `input` is returned as `T` — no text parsing involved.
  */
-export async function generateJSON<T>(
+export async function generateStructured<T>(
   systemPrompt: string,
   userPrompt: string,
-  maxTokens: number = 4096
+  tool: StructuredTool,
+  maxTokens: number = 8000
 ): Promise<T> {
-  const response = await chat(
-    systemPrompt + '\n\nYou must respond with valid JSON only, no other text.',
-    [{ role: 'user', content: userPrompt }],
-    maxTokens
+  const anthropic = getClient();
+
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: maxTokens,
+    system: systemPrompt,
+    tools: [tool],
+    tool_choice: { type: 'tool', name: tool.name },
+    messages: [{ role: 'user', content: userPrompt }],
+  });
+
+  const toolUse = response.content.find(
+    (b): b is Anthropic.ToolUseBlock =>
+      b.type === 'tool_use' && b.name === tool.name
   );
-  return extractJSON<T>(response);
+  if (!toolUse) {
+    throw new Error(`Model did not call the ${tool.name} tool`);
+  }
+  return toolUse.input as T;
 }
 
 // ---------------------------------------------------------------------------
@@ -136,17 +84,22 @@ const WEB_SEARCH_TOOL: Anthropic.WebSearchTool20250305 = {
 };
 
 /**
- * Run a request with the web_search server tool enabled. Handles the
- * `pause_turn` stop reason by re-calling with the accumulated content until
- * the model reaches `end_turn`. Returns the concatenated final text blocks.
+ * Generate structured output from a web-search-backed request. The model has
+ * both the `web_search` server tool and a `submitTool` for emitting the final
+ * result. `tool_choice` is left as auto (it cannot be forced while `web_search`
+ * must remain usable). Handles the `pause_turn` stop reason by re-calling with
+ * accumulated content. When the model calls `submitTool`, its `input` is
+ * returned as `T`. If the turn ends without that call, this throws.
  */
-export async function chatWithWebSearch(
+export async function generateStructuredWithWebSearch<T>(
   systemPrompt: string,
   userPrompt: string,
-  maxTokens: number = 6000
-): Promise<string> {
+  submitTool: StructuredTool,
+  maxTokens: number = 8000
+): Promise<T> {
   const anthropic = getClient();
 
+  const tools: Anthropic.ToolUnion[] = [WEB_SEARCH_TOOL, submitTool];
   const messages: Anthropic.MessageParam[] = [
     { role: 'user', content: userPrompt },
   ];
@@ -155,7 +108,7 @@ export async function chatWithWebSearch(
     model: MODEL,
     max_tokens: maxTokens,
     system: systemPrompt,
-    tools: [WEB_SEARCH_TOOL],
+    tools,
     messages,
   });
 
@@ -168,24 +121,21 @@ export async function chatWithWebSearch(
       model: MODEL,
       max_tokens: maxTokens,
       system: systemPrompt,
-      tools: [WEB_SEARCH_TOOL],
+      tools,
       messages,
     });
   }
 
-  return extractText(response.content);
-}
-
-/**
- * Run a web-search-backed request and extract JSON from the final text.
- */
-export async function generateJSONWithWebSearch<T>(
-  systemPrompt: string,
-  userPrompt: string,
-  maxTokens: number = 6000
-): Promise<T> {
-  const text = await chatWithWebSearch(systemPrompt, userPrompt, maxTokens);
-  return extractJSON<T>(text);
+  const toolUse = response.content.find(
+    (b): b is Anthropic.ToolUseBlock =>
+      b.type === 'tool_use' && b.name === submitTool.name
+  );
+  if (!toolUse) {
+    throw new Error(
+      `Model did not call the ${submitTool.name} tool before ending its turn`
+    );
+  }
+  return toolUse.input as T;
 }
 
 // ---------------------------------------------------------------------------
@@ -285,15 +235,6 @@ export async function runToolUseLoop(
 
   // Loop guard exhausted.
   return { text: '', toolCalls };
-}
-
-// Token estimation (rough approximation)
-export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
-}
-
-export function estimateMessagesTokens(messages: ChatMessage[]): number {
-  return messages.reduce((sum, m) => sum + estimateTokens(m.content), 0);
 }
 
 export { anthropicApiKey };

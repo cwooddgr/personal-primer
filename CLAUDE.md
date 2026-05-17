@@ -84,7 +84,13 @@ Each day delivers three artifacts plus framing text that cohere around the activ
 Bundles are identified by `(arcId, dayInArc)`, not calendar date. They carry an `engaged` boolean — `false` until the user sends their first message. At most one un-engaged bundle exists per user; if it goes stale (created on a prior calendar day) it is regenerated in place. Arc progression counts only engaged bundles, so skipping a day never consumes a slot.
 
 ### Bundle Generation
-A single LLM pass with the `web_search` tool selects three coherent artifacts for the arc's topic/phase and finds verified, working URLs for each in the same motion (music → a real `youtube.com` watch URL, image → a working image URL, text → a verbatim quote checked against its source). Coherence is instructed in-prompt — there is no separate validation call. Recent exposures (30-day window) are included so the model self-avoids repeats. Framing text is generated afterward, once artifacts are final, in the user's voice preference.
+Bundle generation is **asynchronous**. `GET /api/today` never generates inline — it returns a status (`generating` / `ready` / `failed`) immediately and the frontend polls. When today's bundle doesn't exist, `today.ts` atomically creates a `pending` bundle document (the atomic create is the concurrency lock); a Firestore `onDocumentWritten` trigger (`bundleGenerator`) then runs generation out-of-band, free of Firebase Hosting's 60-second proxy timeout.
+
+Generation is a **single `web_search` LLM call**: the model selects three coherent artifacts for the arc's topic/phase, verifies them, and writes the framing text — all in one pass. Coherence is instructed in-prompt; recent exposures (30-day window) are included so the model self-avoids repeats; framing uses the user's voice preference. The result is returned via a structured tool call (`submit_bundle`), so the output is schema-enforced rather than parsed from text.
+
+The model supplies the music's YouTube URL directly. **Image URLs are resolved via the Wikimedia Commons API** from the artwork's title/artist — the model identifies the artwork but does not emit the image URL itself (it can't reliably produce Wikimedia's content-hashed file paths). If image resolution fails, the bundle is marked `failed` and an attempt-capped retry regenerates with a different artwork.
+
+A bundle carries `generationStatus` (`pending` / `generating` / `ready` / `failed`) and `generationAttempts`. A bundle wedged in `generating` past a watchdog threshold is treated as failed and retried.
 
 ### Conversation
 The conversation guide's system prompt includes the day's artifacts, framing, arc context, the user's voice preference, and memory for continuity. Session and arc end are driven by model **tool calls** (`conclude_session`, `conclude_arc`), not in-band text markers. The guide can also call `update_voice_preference` when the user asks it to change register ("be more direct"). Conversations may branch freely and never edit the syllabus.
@@ -100,7 +106,7 @@ All endpoints require authentication (except `/api/auth/*`):
 - `POST /api/auth/register` — register new user (checks whitelist)
 - `POST /api/auth/forgot-password` — send password reset email
 - `POST /api/auth/resend-verification` — resend email verification
-- `GET /api/today` — today's bundle (generates if needed), with arc info and dayInArc
+- `GET /api/today` — returns today's bundle if ready, otherwise a `generating`/`failed` status (generation runs out-of-band; see Bundle Generation)
 - `POST /api/today/message` — send a conversation message
 - `POST /api/today/end-session` — end session, extract insights
 - `POST /api/arc/end-early` — end the current arc early, advance to the next
@@ -120,8 +126,9 @@ When the final day of an arc ends, the LLM generates a short retrospective and t
 ## Key Constraints
 
 - No artifact or creator repeats within a 30-day window (recent exposures are passed to the model)
-- All artifact links are found and verified by the model via web search during generation
-- Framing text is generated after artifacts are finalized, so it always matches what is displayed
+- Music URLs come from the model; image URLs are resolved via the Wikimedia Commons API
+- Framing text is produced in the same call as artifact selection, so it always matches what is displayed
+- Bundle generation runs out-of-band in a Firestore trigger; `GET /api/today` is non-blocking
 - Bundle identity is `(arcId, dayInArc)`; arc progression counts only `engaged` bundles
 - One season active at a time, 12 arcs per season, 7 days per arc
 - One arc active at a time per user
@@ -132,17 +139,18 @@ When the final day of an arc ends, the LLM generates a short retrospective and t
 - `index.ts` — Cloud Functions entry point, routes all API calls with auth middleware
 - `middleware/auth.ts` — token verification middleware
 - `api/auth.ts` — registration, forgot password, verification endpoints
-- `api/today.ts` — resolves/generates the day's bundle
+- `api/today.ts` — resolves the day's bundle; non-blocking, returns a `generating`/`ready`/`failed` status
 - `api/message.ts` — conversation message handler; engages the bundle on first message
 - `api/season.ts` — `GET /api/season` and conversational season steering
 - `api/endSession.ts`, `api/endArcEarly.ts` — session/arc end, arc and season advancement
 - `api/history.ts`, `api/conversationHistory.ts` — past bundles and conversations
-- `services/anthropic.ts` — Claude client; `web_search` and client-side tool-use loop helpers
+- `triggers/bundleTrigger.ts` — Firestore `onDocumentWritten` trigger; generates the daily bundle out-of-band
+- `services/anthropic.ts` — Claude client; structured-output (tool-use) and `web_search` helpers
 - `services/seasonPlanner.ts` — batched 12-arc season generation
-- `services/bundleGenerator.ts` — daily bundle generation via web search
+- `services/bundleGenerator.ts` — daily bundle generation: single web-search call + Wikimedia image resolution
 - `services/conversationManager.ts` — chat with tool-based session/arc end
 - `services/insightExtractor.ts` — continuity insights, arc/season advancement, profile derivation
-- `services/linkValidator.ts` — generic URL reachability check
+- `services/linkValidator.ts` — Wikimedia Commons image resolution + URL reachability check
 - `utils/firestore.ts` — user-scoped Firestore operations (all functions take userId)
 - `scheduled/inactivityCheck.ts` — scheduled function ending stale sessions (every 15 min)
 

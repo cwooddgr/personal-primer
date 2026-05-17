@@ -25,8 +25,89 @@ import {
   getVoicePreference,
   toTimestamp,
 } from '../utils/firestore';
-import { generateJSON } from './anthropic';
+import { generateStructured, StructuredTool } from './anthropic';
 import { planNextSeason } from './seasonPlanner';
+
+// Tool the model calls to submit extracted continuity notes.
+const SUBMIT_EXTRACTION_TOOL: StructuredTool = {
+  name: 'submit_extraction',
+  description: 'Submit the continuity notes extracted from the conversation.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      personalContext: {
+        type: 'array',
+        description:
+          'Stable personal facts worth remembering. Empty if the conversation was thin.',
+        items: { type: 'string' },
+      },
+      rawSummary: {
+        type: 'string',
+        description: "A 2-3 sentence summary of the conversation's substance.",
+      },
+      suggestedReading: {
+        type: 'object',
+        description:
+          'One piece of suggested further reading. Omit entirely if no meaningful suggestion emerges.',
+        properties: {
+          title: {
+            type: 'string',
+            description: 'Exact title of a real article, book, or essay.',
+          },
+          url: {
+            type: 'string',
+            description: 'A direct URL to it (Wikipedia or a stable source).',
+          },
+          rationale: {
+            type: 'string',
+            description:
+              "1-2 sentences (addressing the user as 'you') on why it connects.",
+          },
+        },
+        required: ['title', 'url', 'rationale'],
+      },
+    },
+    required: ['personalContext', 'rawSummary'],
+  },
+};
+
+// Tool the model calls to submit the arc retrospective summary.
+const SUBMIT_ARC_SUMMARY_TOOL: StructuredTool = {
+  name: 'submit_arc_summary',
+  description: 'Submit the retrospective summary of the completed arc.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      summary: {
+        type: 'string',
+        description: '1-3 paragraphs reflecting on this arc.',
+      },
+    },
+    required: ['summary'],
+  },
+};
+
+// Tool the model calls to submit the derived light user profile.
+const SUBMIT_PROFILE_TOOL: StructuredTool = {
+  name: 'submit_profile',
+  description: 'Submit the derived light, stable user profile.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      intellectualLeanings: {
+        type: 'array',
+        description:
+          '3-6 short phrases naming domains, angles, or sensibilities the user gravitates toward.',
+        items: { type: 'string' },
+      },
+      notes: {
+        type: 'string',
+        description: 'One short paragraph of stable observations about how the user engages.',
+      },
+    },
+    required: ['intellectualLeanings', 'notes'],
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Per-session extraction — conversational continuity ONLY
@@ -59,24 +140,13 @@ function buildExtractionPrompt(bundle: DailyBundle, conversation: Conversation):
 ${conversationText}
 </conversation>
 
-Extract continuity notes and return as JSON:
-{
-  "personalContext": ["stable personal facts worth remembering"],
-  "rawSummary": "2-3 sentence summary of the conversation's substance",
-  "suggestedReading": {
-    "title": "exact title of a real article, book, or essay",
-    "url": "a direct URL to it (Wikipedia or a stable source)",
-    "rationale": "1-2 sentences (addressing the user as 'you') on why it connects"
-  }
-}
-
-Set "suggestedReading" to null if no meaningful suggestion emerges. Keep personalContext empty if the conversation was thin.`;
+Extract continuity notes and call the submit_extraction tool. Omit the suggestedReading field entirely if no meaningful suggestion emerges. Keep personalContext empty if the conversation was thin.`;
 }
 
 interface LLMExtraction {
   personalContext: string[];
   rawSummary: string;
-  suggestedReading: SuggestedReading | null;
+  suggestedReading?: SuggestedReading;
 }
 
 export interface ExtractionResult {
@@ -94,9 +164,11 @@ export async function extractInsights(
     return null;
   }
 
-  const extraction = await generateJSON<LLMExtraction>(
+  const extraction = await generateStructured<LLMExtraction>(
     EXTRACTION_SYSTEM_PROMPT,
-    buildExtractionPrompt(bundle, conversation)
+    buildExtractionPrompt(bundle, conversation),
+    SUBMIT_EXTRACTION_TOOL,
+    4096
   );
 
   const insights: SessionInsights = {
@@ -171,8 +243,7 @@ ${arc.description}
 ARTIFACTS PRESENTED:
 ${artifactList || '(no artifacts recorded)'}
 
-Write a retrospective summary. Return as JSON:
-{ "summary": "1-3 paragraphs reflecting on this arc" }`;
+Write a retrospective summary, then call the submit_arc_summary tool with it.`;
 }
 
 interface LLMArcSummary {
@@ -182,9 +253,11 @@ interface LLMArcSummary {
 async function generateArcSummary(userId: string, arc: Arc): Promise<string> {
   const bundles = await getArcBundles(userId, arc.id);
   const voicePreference = await getVoicePreference(userId);
-  const result = await generateJSON<LLMArcSummary>(
+  const result = await generateStructured<LLMArcSummary>(
     buildArcSummarySystemPrompt(voicePreference),
-    buildArcSummaryPrompt(arc, bundles)
+    buildArcSummaryPrompt(arc, bundles),
+    SUBMIT_ARC_SUMMARY_TOOL,
+    4096
   );
   return result.summary;
 }
@@ -215,11 +288,7 @@ ${summaries.length ? summaries.map(s => `- ${s}`).join('\n') : '(none recorded)'
 PERSONAL CONTEXT GATHERED:
 ${context.length ? context.map(c => `- ${c}`).join('\n') : '(none recorded)'}
 
-Derive the light user profile. Return as JSON:
-{
-  "intellectualLeanings": ["3-6 short phrases"],
-  "notes": "one short paragraph"
-}`;
+Derive the light user profile, then call the submit_profile tool with it.`;
 }
 
 /**
@@ -236,9 +305,11 @@ export async function deriveSeasonUserProfile(
   let derived: LLMUserProfile = { intellectualLeanings: [], notes: '' };
   if (insights.length > 0) {
     try {
-      derived = await generateJSON<LLMUserProfile>(
+      derived = await generateStructured<LLMUserProfile>(
         PROFILE_SYSTEM_PROMPT,
-        buildProfilePrompt(insights)
+        buildProfilePrompt(insights),
+        SUBMIT_PROFILE_TOOL,
+        4096
       );
     } catch (err) {
       console.warn('[Insights] Profile derivation failed; using empty profile.', err);

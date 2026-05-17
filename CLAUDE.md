@@ -4,17 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Personal Primer is a multi-user web application that delivers a single, thoughtful daily intellectual encounter. It curates four artifacts daily (music, image, text, framing) around ~7 day thematic "arcs."
+Personal Primer is a multi-user web application that delivers a single, thoughtful daily intellectual encounter. It curates three artifacts daily (music, image, text) plus framing text, organized into week-long thematic "arcs."
 
 **Core philosophy:** Formation over education, one intentional encounter per day, no testing/grading/streaks.
+
+The project was re-architected from an earlier 2024-era design; see `REBUILD-SPEC.md` for the rationale and the shape of that change.
 
 ## Tech Stack
 
 - **Frontend:** React 18 + Vite (in `hosting/`)
 - **Backend:** Node.js 20 / TypeScript with Firebase Cloud Functions v2 (in `functions/`)
 - **Database:** Firebase Firestore
-- **LLM:** Anthropic Claude API (claude-opus-4-5-20251101) via @anthropic-ai/sdk
-- **Link Resolution:** Google Custom Search API
+- **LLM:** Anthropic Claude API (`claude-opus-4-7`) via `@anthropic-ai/sdk`, using the `web_search` server tool for artifact discovery and verification
 - **Authentication:** Firebase Auth (multi-user with email whitelist)
 
 ## Build and Deploy Commands
@@ -24,10 +25,8 @@ Personal Primer is a multi-user web application that delivers a single, thoughtf
 cd functions && npm install
 cd hosting && npm install
 
-# Set secrets (required before deploy)
+# Set the API secret (required before deploy)
 firebase functions:secrets:set ANTHROPIC_API_KEY
-firebase functions:secrets:set GOOGLE_SEARCH_API_KEY
-firebase functions:secrets:set GOOGLE_SEARCH_CX
 
 # Local development
 cd hosting && npm run dev          # Frontend dev server (port 5173)
@@ -41,7 +40,10 @@ cd hosting && npm run build        # Build React app
 firebase deploy                    # Deploy everything
 firebase deploy --only functions   # Deploy only functions
 firebase deploy --only hosting     # Deploy only hosting
+firebase deploy --only firestore   # Deploy security rules + indexes
 ```
+
+**Deploy prerequisite:** the `web_search` tool must be enabled on the Anthropic API account (developer console settings). Bundle generation fails without it.
 
 ## Architecture
 
@@ -49,259 +51,125 @@ firebase deploy --only hosting     # Deploy only hosting
 All user data is stored in subcollections under `/users/{userId}/`:
 ```
 /users/{userId}/
+  /seasons/{seasonId}
   /arcs/{arcId}
-  /dailyBundles/{YYYY-MM-DD}
+  /dailyBundles/{bundleId}
   /exposures/{autoId}
-  /conversations/{YYYY-MM-DD}
-  /sessionInsights/{YYYY-MM-DD}
-  /userReactions/{autoId}
+  /conversations/{bundleId}
+  /sessionInsights/{bundleId}
 
 /allowedEmails/{normalizedEmail}  (whitelist for registration)
 /users/{userId}                    (user profile documents)
 ```
 
 ### Authentication Flow
-1. **Registration:** User submits email/password → Backend checks `/allowedEmails` whitelist → Creates Firebase Auth user
+1. **Registration:** User submits email/password → backend checks `/allowedEmails` whitelist → creates Firebase Auth user
 2. **Login:** Standard Firebase Auth email/password
-3. **API Calls:** Frontend sends ID token in `Authorization: Bearer` header → Backend verifies with `admin.auth().verifyIdToken()`
+3. **API Calls:** Frontend sends ID token in `Authorization: Bearer` header → backend verifies with `admin.auth().verifyIdToken()`
 
-### Daily Bundle Structure (Fixed)
-Each day delivers exactly four elements that cohere around the current arc theme:
-1. **Music** - One piece with Apple Music link (validated)
-2. **Image** - One visual artwork from museum/Wikimedia (validated)
-3. **Text** - One quote or literary excerpt
-4. **Framing** - 2-3 paragraph introduction connecting to recent days
+### Courses and Arcs
+A **season** (called a "Course" in the UI) is a batch-planned syllabus of **12 arcs**, each a fixed **7-day** topic. The whole season is planned in a single LLM call so topics are diverse and deliberately sequenced, rather than each arc riffing on the previous one (the old per-arc chain caused topic monotony).
+
+- **Season 1** is planned with no user knowledge — a broad survey.
+- **Season N+1** is planned with the full list of every prior topic (do-not-retread) plus a light, stable user profile that *biases* but never generates the syllabus.
+- An arc has `status: 'planned' | 'active' | 'completed'` and `orderInSeason` (1–12). Exactly one arc is active per user. When an arc completes, the next planned arc activates. When the last arc completes, the next season is planned.
+
+### Daily Bundle
+Each day delivers three artifacts plus framing text that cohere around the active arc:
+1. **Music** — one piece with a YouTube link
+2. **Image** — one visual artwork
+3. **Text** — one verbatim, correctly attributed quote or excerpt
+4. **Framing** — 1–3 paragraphs introducing the encounter
+
+Bundles are identified by `(arcId, dayInArc)`, not calendar date. They carry an `engaged` boolean — `false` until the user sends their first message. At most one un-engaged bundle exists per user; if it goes stale (created on a prior calendar day) it is regenerated in place. Arc progression counts only engaged bundles, so skipping a day never consumes a slot.
+
+### Bundle Generation
+A single LLM pass with the `web_search` tool selects three coherent artifacts for the arc's topic/phase and finds verified, working URLs for each in the same motion (music → a real `youtube.com` watch URL, image → a working image URL, text → a verbatim quote checked against its source). Coherence is instructed in-prompt — there is no separate validation call. Recent exposures (30-day window) are included so the model self-avoids repeats. Framing text is generated afterward, once artifacts are final, in the user's voice preference.
+
+### Conversation
+The conversation guide's system prompt includes the day's artifacts, framing, arc context, the user's voice preference, and memory for continuity. Session and arc end are driven by model **tool calls** (`conclude_session`, `conclude_arc`), not in-band text markers. The guide can also call `update_voice_preference` when the user asks it to change register ("be more direct"). Conversations may branch freely and never edit the syllabus.
+
+### Voice Preference
+`UserProfile.voicePreference` is a freeform string the guide updates via tool call. It applies to all user-facing generation: framing text, conversation, and arc retrospectives. There is no fixed tone menu (the earlier five-tone system was removed).
+
+### Memory
+Insight extraction is for **conversational continuity only** — personal context the guide should remember. A light, stable `UserMemoryProfile` is derived at **season boundaries** (not per conversation) and gently biases the next season's planning. Memory never steers the current syllabus.
 
 ### API Endpoints
 All endpoints require authentication (except `/api/auth/*`):
-- `POST /api/auth/register` - Register new user (checks whitelist)
-- `POST /api/auth/forgot-password` - Send password reset email
-- `POST /api/auth/resend-verification` - Resend email verification
-- `GET /api/today` - Returns today's bundle (generates if needed), includes arc info, dayInArc, and currentTone
-- `POST /api/today/message` - Send conversation message (returns `sessionShouldEnd` flag)
-- `POST /api/today/end-session` - End session, extract insights
-- `POST /api/today/react` - Record reaction to artifact
-- `POST /api/today/tone` - Change tone mid-conversation (records change + updates default)
-- `GET /api/arc` - Get current arc
-- `GET /api/history` - Past bundles (paginated)
-- `GET /api/history/:date/conversation` - Get conversation history for a specific date
-- `POST /api/arc/refine/message` - Refine next arc theme via conversation
-- `GET /api/tones` - List all tone definitions with user's current default
-- `GET /api/user/profile` - Get user profile (includes currentTone, hasSelectedTone)
-- `POST /api/user/tone` - Set user's default tone (for new conversations)
-
-### Bundle Generation Flow (Two-Phase)
-Bundle generation uses a two-phase approach to ensure framing text always matches the displayed artifacts:
-
-**Phase 1: Artifact Selection & Validation**
-1. Gather context (arc, recent exposures, insights, recent creators)
-2. Calculate day in arc (bundle count + 1, since generating a new bundle) and phase (early/middle/late)
-3. LLM selects artifacts with search queries (no framing text yet)
-4. **Coherence validation:** Second LLM call checks for cross-reference mismatches
-   - If text mentions artist X, image must be by artist X
-   - If coherence issues found, replacement artifacts are requested (with exposure awareness)
-5. Resolve and validate links with retry logic:
-   - **Music:** Up to 5 retries with iTunes API, classical-aware search (see below)
-   - **Image:** Up to 3 retries with Wikimedia Commons API + programmatic duplicate check
-   - **Text:** Programmatic validation against recent authors (normalized name comparison), up to 3 retries
-   - All alternative artifact prompts include recent exposures to prevent duplicates
-
-**Phase 2: Framing Text Generation**
-6. Once all artifacts are finalized with valid links, generate framing text via separate LLM call
-7. On final day of arc, framing includes special closure instructions
-8. Persist bundle as `status: 'draft'` (exposures NOT created yet)
-
-This two-phase approach ensures framing text always references the actual displayed artifacts, even when artifacts are replaced during validation or link resolution.
-
-### Bundle Status (Draft/Delivered)
-Bundles have a `status` field that tracks intentional engagement:
-- **draft**: Bundle generated but user hasn't interacted (just loaded the page)
-- **delivered**: User sent their first message, marking intentional engagement
-
-This prevents passive page loads (e.g., Safari refreshing a background tab) from advancing the arc or recording exposures.
-
-**On first message:**
-1. Bundle marked as `status: 'delivered'`
-2. Exposure records created (music, image, text)
-3. Bundle now counts toward `dayInArc`
-
-**Queries filter by status:**
-- `calculateDayInArc` only counts delivered bundles
-- `getBundleHistory` only returns delivered bundles
-- `getArcBundles` only returns delivered bundles
-
-Draft bundles exist in Firestore but are effectively invisible to the user experience.
-
-### Classical Music Search
-For classical music, the LLM provides additional fields: `composer`, `performer`, `isClassical`. The search strategy differs:
-- Search prioritizes `{composer} {title}` (e.g., "Arvo Pärt Fratres")
-- Accepts matches where iTunes artist is either the composer OR the performer
-- Title must match - will NOT return unrelated works by the same performer
-- No artist-only fallback (removed to prevent returning wrong pieces like "Here Comes the Sun" when searching for "Fratres")
-- For exposures, stores the composer (not performer) as `creator` to avoid same-composer repeats
-
-### Image Resolution
-Images are resolved via Wikimedia Commons API with a multi-strategy search:
-1. LLM-provided `searchQuery` (tried first - this is purpose-crafted for the artwork)
-2. `{title} {artist}` combination
-3. `{artist} {title}` (reversed)
-4. `{title}` only
-5. Fallback: Google Custom Search → Wikipedia page → extract image via Wikimedia API
-
-The `searchQuery` parameter from the LLM is critical—it often includes specifics like "Chagall I and the Village painting 1911" that improve match accuracy.
-
-### Artifact Coherence Validation
-After artifact selection but BEFORE link validation, a second LLM call validates coherence:
-- **Strict checks:** If text explicitly mentions an artist (e.g., "as Chagall understood..."), the image must be by that artist
-- **Lenient checks:** General thematic connections (e.g., shared motif of dreams) are acceptable without explicit cross-references
-- When issues are detected, replacement artifacts are requested with:
-  - Context about the required coherence
-  - Recent exposures list to prevent duplicates
-- Coherence runs before link validation so any replacements go through full link validation
-
-### Conversation Context
-System prompts include: today's artifacts, current arc info, user insights from past sessions, and tone-specific guidance.
-
-### Tone System
-Users can customize the AI guide's communication style via five tones:
-
-| ID | Name | Style |
-|----|------|-------|
-| `reflective` | The Listener | Counselor-like, emotionally attuned |
-| `guided` | The Tutor | Personal tutor style (DEFAULT) |
-| `inquiry` | The Questioner | Socratic, question-driven |
-| `practical` | The Craft Mentor | Practitioner perspective |
-| `direct` | The Editor | No-nonsense, declarative |
-
-**Tone affects user-facing prompts only:**
-- Framing text generation
-- Conversation responses
-- Arc completion summaries
-- Arc refinement dialogs
-
-**Tone does NOT affect:**
-- Artifact selection (internal operations)
-- Coherence validation
-- Insight extraction (internal analysis)
-
-**API Endpoints:**
-- `GET /api/tones` - List all tone definitions
-- `POST /api/user/tone` - Set user's default tone (for new conversations)
-- `POST /api/today/tone` - Change tone mid-conversation (records change + updates default)
-
-**Tone Resolution for Messages** (in order of priority):
-1. Most recent `toneChange` in conversation
-2. Conversation's `initialTone` (set when first message sent)
-3. User's default tone from profile
-
-**Data Model:**
-- `UserProfile.currentTone` - User's default tone preference
-- `UserProfile.hasSelectedTone` - Whether user completed onboarding tone selection
-- `Conversation.initialTone` - Tone when conversation started
-- `Conversation.toneChanges[]` - Array of `{messageIndex, tone}` for mid-conversation changes
-- `DailyBundle.status` - `'draft'` or `'delivered'` (see Bundle Status section)
-- `DailyBundle.tone` - Tone used for framing text generation
-
-**Frontend Flow:**
-- New users see ToneSelectionView after AboutView during onboarding
-- Existing users without `hasSelectedTone` see tone selection on next login
-- Preferences page allows changing default tone (affects new conversations only)
-- Inline dropdown in chat allows changing tone mid-conversation
+- `POST /api/auth/register` — register new user (checks whitelist)
+- `POST /api/auth/forgot-password` — send password reset email
+- `POST /api/auth/resend-verification` — resend email verification
+- `GET /api/today` — today's bundle (generates if needed), with arc info and dayInArc
+- `POST /api/today/message` — send a conversation message
+- `POST /api/today/end-session` — end session, extract insights
+- `POST /api/arc/end-early` — end the current arc early, advance to the next
+- `GET /api/season` — current season (Course) with all 12 arcs and statuses
+- `POST /api/season/steer/message` — conversationally steer the planned arcs of the current season
+- `GET /api/history` — past bundles, grouped by arc
+- `GET /api/history/:bundleId/conversation` — conversation history for a past bundle
+- `GET /api/user/profile` — user profile (hasSeenAbout, voicePreference)
+- `POST /api/user/mark-about-seen` — mark the onboarding About page as seen
 
 ### Insight Extraction
-Triggered on explicit session end, smart session-end detection, or 1 hour inactivity. Extracts: meaningful connections, revealed interests, personal context, items to revisit, and suggested reading (with resolved URL).
+Triggered on explicit session end, natural conversational close, or 1-hour inactivity. Extracts personal context and a short summary for conversational continuity, plus an optional suggested reading.
 
-### Smart Session-End Detection
-The system detects natural conversation endings via:
-1. **Explicit marker:** Assistant adds `{{END_SESSION}}` when user signals ending
-2. **Pattern matching:** User ending signals ("goodbye", "let's end", "that's all") combined with assistant farewells ("take care", "see you")
-
-### Arc Completion & Transition
-When the final day of an arc ends:
-1. LLM generates 2-3 paragraph retrospective summary of the arc journey
-2. New arc theme, description, and shortDescription generated based on user's revealed interests (uses final conversation for context)
-3. New arc automatically created and becomes active
-4. Frontend displays arc completion summary and "coming tomorrow" preview
-
-### Arc Refinement
-User can change the suggested next arc theme before it begins:
-1. Click "Change" link next to the "Coming tomorrow" preview
-2. Conversation continues in the same chat interface
-3. User and assistant discuss alternative themes
-4. When agreed, assistant includes `{{NEW_ARC:theme|description|shortDescription}}` marker
-5. Pending arc is updated in Firestore and preview refreshes
-6. User can cancel anytime to keep original theme
-
-### History View
-The history page (`/history`) displays past bundles organized by arc:
-- Bundles grouped under arc headings with theme and description
-- Each day shows date and artifact summaries (music, image, text titles)
-- "View conversation" link opens full context for that day
-- Conversation history view shows: arc info, day X of Y, all artifacts, framing text, conversation prompt, and full chat transcript (read-only)
+### Arc & Season Completion
+When the final day of an arc ends, the LLM generates a short retrospective and the next planned arc activates. When the final arc of a season completes, a `UserMemoryProfile` is derived and the next season is planned.
 
 ## Key Constraints
 
-- No artifact may repeat within 30-day window (check exposures)
-- No text author may repeat within 30-day window (programmatically enforced with normalized name comparison, e.g., "T.S. Eliot" = "T. S. Eliot")
-- No image may repeat within 30-day window (programmatically enforced with normalized `title - artist` comparison)
-- For classical music, composer is stored as `creator` in exposures (not performer) to avoid same-composer repeats
-- Music creators are soft-avoided via LLM instructions (exposures included in alternative prompts)
-- All links must be validated before delivery (HEAD request, 200 status)
-- Framing text is generated AFTER all artifacts are validated (ensures framing matches displayed artifacts)
-- Only one arc active at a time per user
-- Arc duration is bundle-count based (skipped days don't advance the arc)
-- Token limit of ~50k for conversation context
+- No artifact or creator repeats within a 30-day window (recent exposures are passed to the model)
+- All artifact links are found and verified by the model via web search during generation
+- Framing text is generated after artifacts are finalized, so it always matches what is displayed
+- Bundle identity is `(arcId, dayInArc)`; arc progression counts only `engaged` bundles
+- One season active at a time, 12 arcs per season, 7 days per arc
+- One arc active at a time per user
 
 ## Key Files
 
-- `functions/src/index.ts` - Cloud Functions entry point, routes all API calls with auth middleware
-- `functions/src/middleware/auth.ts` - Token verification middleware
-- `functions/src/api/auth.ts` - Registration, forgot password, verification endpoints
-- `functions/src/utils/firestore.ts` - User-scoped Firestore operations (all functions take userId)
-- `functions/src/tones/index.ts` - Tone definitions, system prompt fragments, and helpers
-- `functions/src/services/bundleGenerator.ts` - Generates daily bundles via LLM (includes final day handling)
-- `functions/src/services/conversationManager.ts` - Handles chat with context and session-end detection
-- `functions/src/services/insightExtractor.ts` - Extracts insights and suggested reading from conversations
-- `functions/src/services/arcGenerator.ts` - Generates arc completion summaries and creates next arcs
-- `functions/src/api/refineArc.ts` - Handles arc refinement conversation and theme updates
-- `functions/src/api/message.ts` - Message handler with tone resolution logic
-- `functions/src/services/linkValidator.ts` - iTunes API for music, Wikimedia API for images, Google Custom Search for readings
-- `functions/src/scheduled/inactivityCheck.ts` - Scheduled function to end stale sessions across all users (every 15 min)
-- `hosting/src/App.tsx` - Main app with auth UI, onboarding flow (About → Tone Selection)
-- `hosting/src/views/TodayView.tsx` - Main daily view (shows arc shortDescription in header)
-- `hosting/src/views/ToneSelectionView.tsx` - Onboarding tone selection screen
-- `hosting/src/views/PreferencesView.tsx` - User preferences (tone settings)
-- `hosting/src/views/HistoryView.tsx` - History page with bundles organized by arc
-- `hosting/src/views/ConversationHistoryView.tsx` - Read-only view of past conversations with full bundle context
-- `hosting/src/components/ChatInterface.tsx` - Conversation UI (handles suggested reading, arc completion, arc refinement, and inline tone changes)
-- `hosting/src/components/ToneSelector.tsx` - Reusable tone selector (full card grid and compact dropdown modes)
+### Backend (`functions/src/`)
+- `index.ts` — Cloud Functions entry point, routes all API calls with auth middleware
+- `middleware/auth.ts` — token verification middleware
+- `api/auth.ts` — registration, forgot password, verification endpoints
+- `api/today.ts` — resolves/generates the day's bundle
+- `api/message.ts` — conversation message handler; engages the bundle on first message
+- `api/season.ts` — `GET /api/season` and conversational season steering
+- `api/endSession.ts`, `api/endArcEarly.ts` — session/arc end, arc and season advancement
+- `api/history.ts`, `api/conversationHistory.ts` — past bundles and conversations
+- `services/anthropic.ts` — Claude client; `web_search` and client-side tool-use loop helpers
+- `services/seasonPlanner.ts` — batched 12-arc season generation
+- `services/bundleGenerator.ts` — daily bundle generation via web search
+- `services/conversationManager.ts` — chat with tool-based session/arc end
+- `services/insightExtractor.ts` — continuity insights, arc/season advancement, profile derivation
+- `services/linkValidator.ts` — generic URL reachability check
+- `utils/firestore.ts` — user-scoped Firestore operations (all functions take userId)
+- `scheduled/inactivityCheck.ts` — scheduled function ending stale sessions (every 15 min)
+
+### Frontend (`hosting/src/`)
+- `App.tsx` — main app with auth UI and About-only onboarding
+- `api/client.ts` — typed API client
+- `views/TodayView.tsx` — main daily view
+- `views/CourseView.tsx` — "Your Course": the 12-arc syllabus with status and conversational steering
+- `views/HistoryView.tsx` — past bundles grouped by arc
+- `views/ConversationHistoryView.tsx` — read-only past conversation, keyed by bundleId
+- `components/ChatInterface.tsx` — conversation UI (handles suggested reading, arc completion)
+- `components/MusicCard.tsx`, `ImageCard.tsx`, `TextCard.tsx`, `FramingText.tsx` — artifact display
 
 ## First-Time Setup
 
-1. Create Firebase project at console.firebase.google.com
+1. Create a Firebase project at console.firebase.google.com
 2. Enable Firestore, Authentication (Email/Password), and Functions
 3. Copy `hosting/.env.example` to `hosting/.env` with your Firebase config
-4. Set up Google Custom Search Engine at programmablesearch.google.com
-5. Run `firebase functions:secrets:set` for all three secrets
-6. Deploy security rules: `firebase deploy --only firestore:rules`
-7. Add allowed emails to `/allowedEmails` collection in Firestore
-8. Create first arc for each user in Firestore (see `scripts/seed-arc.ts`)
+4. Enable the `web_search` tool on your Anthropic API account
+5. Run `firebase functions:secrets:set ANTHROPIC_API_KEY`
+6. Deploy security rules and indexes: `firebase deploy --only firestore`
+7. Add allowed emails to the `/allowedEmails` collection in Firestore
+
+The first course is planned automatically on a user's first visit — no seed script is needed.
 
 ## Managing Users
 
 ### Adding a new user
-1. Add their email to `/allowedEmails/{email}` in Firestore Console
-2. User can then register via the signup form
-
-### Migrating existing single-user data
-```bash
-cd functions
-npx ts-node ../scripts/migrate-to-multiuser.ts <userId> <userEmail>
-```
-Get the userId from Firebase Console > Authentication > Users.
-
-## Debugging Scripts
-
-- `./scripts/delete-today-data.sh` - Deletes today's bundle, conversation, and session insights so it can be regenerated. Exposures must still be deleted manually in Firebase Console (they have auto-generated IDs). Run this when debugging bundle generation issues.
-- `./scripts/migrate-to-multiuser.ts` - Migrates single-user data to multi-user structure under `/users/{userId}/`
-- `./scripts/add-bundle-status.ts` - Adds `status: 'delivered'` to existing bundles (one-time migration for the draft/delivered feature)
+1. Add their email to `/allowedEmails/{email}` in the Firestore Console
+2. The user can then register via the signup form

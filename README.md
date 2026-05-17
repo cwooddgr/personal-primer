@@ -1,14 +1,14 @@
 # Personal Primer
 
-A stateful, arc-based AI guide for lifelong intellectual formation.
+A stateful, course-based AI tutor for lifelong intellectual formation.
 
-Personal Primer delivers a single, thoughtful daily intellectual encounter — curating music, visual art, literature, and framing text around thematic "arcs" that span approximately 7 days.
+Personal Primer delivers a single, thoughtful daily intellectual encounter — curating music, visual art, and literature around a week-long theme, then opening a discussion with an AI guide.
 
 ## Philosophy
 
 - **Formation, not education** — nurturing taste and curiosity rather than testing knowledge
 - **One intentional encounter per day** — no streaks, no metrics, no pressure
-- **Memory over metrics** — the system remembers your interests and builds on past conversations
+- **Memory over metrics** — the guide remembers your interests and builds on past conversations
 
 ## Daily Bundle
 
@@ -16,52 +16,31 @@ Each day delivers four cohering elements:
 
 | Element | Description |
 |---------|-------------|
-| **Music** | One piece with validated Apple Music link |
-| **Image** | One visual artwork from museum/Wikimedia sources |
-| **Text** | One quote or literary excerpt |
-| **Framing** | 2-3 paragraphs connecting to recent days |
+| **Music** | One piece with a YouTube link |
+| **Image** | One visual artwork |
+| **Text** | One verbatim quote or literary excerpt |
+| **Framing** | 1–3 paragraphs introducing the encounter |
 
-Artifacts never repeat within 14 days, and creators don't repeat within recent bundles.
+Artifacts and creators are not repeated within a 30-day window.
 
-## Arcs
+## Courses and Arcs
 
-Content is organized into ~7-day thematic journeys (e.g., "Scale", "Time", "Power"). Each arc has early/middle/late phases. When an arc completes, the system generates a retrospective and creates a new arc based on revealed interests.
+Content is organized into **courses** — a syllabus of 12 thematic **arcs**, each a fixed 7-day topic. The whole course is planned up front (like a tutor planning a semester) so the topics are diverse and deliberately sequenced, rather than each topic riffing on the last.
+
+The course is visible and steerable: the "Your Course" view shows all 12 topics with their status, and you can adjust the not-yet-started topics through conversation. When a course finishes, the next is planned — informed by what you covered and a light, stable sense of your interests, but never collapsing into sameness.
 
 ## Conversations
 
-Each day includes an optional conversation with an AI guide who:
-- Engages thoughtfully about the day's artifacts
-- Draws cross-domain connections
-- Remembers personal context from past sessions
-- Suggests related reading
+Each day includes an optional conversation with an AI guide who engages with the day's artifacts, draws cross-domain connections, remembers personal context from past sessions, and suggests related reading.
 
-Sessions end via explicit action, natural conversation endings, or 1-hour inactivity. Insights are extracted and inform future curation.
-
-## Guide Voice (Tone System)
-
-Users can customize how the AI guide communicates via five distinct tones:
-
-| Tone | Name | Style |
-|------|------|-------|
-| **Reflective** | The Listener | Counselor-like, emotionally attuned, creates space for processing |
-| **Guided** | The Tutor | Personal tutor style, balanced explanation with questions (default) |
-| **Inquiry** | The Questioner | Socratic method, question-driven exploration |
-| **Practical** | The Craft Mentor | Practitioner perspective, concrete and applicable |
-| **Direct** | The Editor | No-nonsense, declarative, efficient |
-
-- New users select their preferred tone during onboarding
-- Tone can be changed anytime via Preferences (affects new conversations)
-- Tone can be changed mid-conversation via inline dropdown (affects current conversation immediately)
-- Tone affects framing text, conversations, arc summaries, and arc refinement dialogs
+Sessions end on an explicit action, a natural conversational close, or one hour of inactivity. The guide adapts its voice when you ask it to ("be more direct," "less abstract") and remembers that preference.
 
 ## Tech Stack
 
 - **Frontend**: React 18 + Vite
-- **Backend**: Firebase Cloud Functions v2 (Node.js 20/TypeScript)
+- **Backend**: Firebase Cloud Functions v2 (Node.js 20 / TypeScript)
 - **Database**: Firebase Firestore
-- **LLM**: Anthropic Claude API (claude-opus-4-5-20251101)
-- **Link Resolution**: Google Custom Search API
-- **Auth**: Firebase Auth (multi-user with email whitelist)
+- **LLM**: Anthropic Claude API (`claude-opus-4-7`) with the `web_search` tool for artifact discovery and verification
 
 ## Setup
 
@@ -69,14 +48,13 @@ Users can customize how the AI guide communicates via five distinct tones:
 
 - Node.js 20+
 - Firebase CLI (`npm install -g firebase-tools`)
-- Firebase project on Blaze plan
-- Anthropic API key
-- Google Custom Search API key and Search Engine ID
+- Firebase project on the Blaze plan
+- Anthropic API key, with the **web search tool enabled** on the API account (developer console → settings; required for bundle generation)
 
 ### Installation
 
 ```bash
-# Clone and install dependencies
+# Install dependencies
 cd functions && npm install
 cd ../hosting && npm install
 
@@ -88,18 +66,17 @@ firebase use your-project-id
 cp hosting/.env.example hosting/.env
 # Edit hosting/.env with your Firebase config
 
-# Set secrets
+# Set the API secret
 firebase functions:secrets:set ANTHROPIC_API_KEY
-firebase functions:secrets:set GOOGLE_SEARCH_API_KEY
-firebase functions:secrets:set GOOGLE_SEARCH_CX
 
-# Deploy
+# Deploy security rules and indexes
+firebase deploy --only firestore
+
+# Deploy everything
 firebase deploy
 ```
 
-### Seed First Arc
-
-Create an arc document in Firestore (`arcs` collection) or use `scripts/seed-arc.ts`.
+Add allowed emails to the `/allowedEmails` collection in Firestore so users can register. The first course is planned automatically on a new user's first visit.
 
 ## Development
 
@@ -107,7 +84,7 @@ Create an arc document in Firestore (`arcs` collection) or use `scripts/seed-arc
 # Start Firebase emulators
 firebase emulators:start
 
-# Start frontend dev server (in another terminal)
+# Start the frontend dev server (in another terminal)
 cd hosting && npm run dev
 ```
 

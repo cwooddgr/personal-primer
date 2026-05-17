@@ -1,85 +1,98 @@
 import { Request, Response } from 'express';
-import { TodayResponse } from '../types';
-import { getBundle, getConversation, getActiveArc, getArc, validateDateId, calculateDayInArc, createWelcomeArc, getUserTone } from '../utils/firestore';
-import { generateDailyBundle } from '../services/bundleGenerator';
+import { TodayResponse, DailyBundle } from '../types';
+import {
+  getActiveArc,
+  getActiveSeason,
+  getConversation,
+  getCurrentUnengagedBundle,
+  calculateDayInArc,
+  createBundle,
+  replaceBundleContent,
+  isBundleStale,
+  toTimestamp,
+} from '../utils/firestore';
+import { buildBundle, generateBundleContent } from '../services/bundleGenerator';
+import { planNextSeason } from '../services/seasonPlanner';
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
-    // Check for Anthropic API errors
     if (error.message.includes('credit balance is too low')) {
       return 'Anthropic API credits depleted. Please add credits at console.anthropic.com';
     }
-    if (error.message.includes('invalid_api_key') || error.message.includes('authentication')) {
+    if (
+      error.message.includes('invalid_api_key') ||
+      error.message.includes('authentication')
+    ) {
       return 'Invalid Anthropic API key. Please check your ANTHROPIC_API_KEY secret.';
     }
     if (error.message.includes('rate_limit')) {
       return 'Anthropic API rate limit reached. Please try again in a few minutes.';
-    }
-    // Check for Google Search errors
-    if (error.message.includes('Google Search API')) {
-      return 'Google Search API error. Please check your GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_CX secrets.';
     }
     return error.message;
   }
   return 'An unexpected error occurred';
 }
 
-export async function handleGetToday(req: Request, res: Response, userId: string): Promise<void> {
+export async function handleGetToday(
+  req: Request,
+  res: Response,
+  userId: string
+): Promise<void> {
   try {
-    const dateParam = req.query.date as string;
-    if (!dateParam) {
-      res.status(400).json({ error: 'Date parameter is required. Please refresh the page.' });
+    // Ensure the user has a season; plan season 1 on first load.
+    let season = await getActiveSeason(userId);
+    if (!season) {
+      console.log(`[Today] No season for user ${userId}; planning season 1.`);
+      await planNextSeason(userId);
+      season = await getActiveSeason(userId);
+    }
+
+    const arc = await getActiveArc(userId);
+    if (!arc) {
+      res.status(500).json({ error: 'No active arc found for this season.' });
       return;
     }
-    const todayId = validateDateId(dateParam);
 
-    // Get current arc, or create welcome arc for new users
-    let arc = await getActiveArc(userId);
-    if (!arc) {
-      console.log(`[Today] No arc found for user ${userId}, creating welcome arc`);
-      arc = await createWelcomeArc(userId);
+    // Resolve today's encounter: at most one un-engaged bundle per user.
+    let bundle = await getCurrentUnengagedBundle(userId, arc.id);
+    const dayInArc = await calculateDayInArc(userId, arc);
+
+    if (bundle && isBundleStale(bundle)) {
+      // Stale un-engaged bundle: regenerate in place (same id, same dayInArc).
+      console.log(
+        `[Today] Regenerating stale bundle ${bundle.id} (arc "${arc.theme}" day ${bundle.dayInArc})`
+      );
+      const content = await generateBundleContent(userId, arc, bundle.dayInArc);
+      await replaceBundleContent(userId, bundle.id, {
+        ...content,
+        createdAt: toTimestamp(new Date()),
+      });
+      bundle = {
+        ...bundle,
+        ...content,
+        createdAt: toTimestamp(new Date()),
+      };
+    } else if (!bundle) {
+      // No un-engaged bundle: generate a fresh one for today's slot.
+      console.log(
+        `[Today] Generating new bundle for arc "${arc.theme}" day ${dayInArc}`
+      );
+      const bundleId = `bundle-${arc.id}-${dayInArc}-${Date.now()}`;
+      bundle = await buildBundle(userId, bundleId, arc, dayInArc);
+      await createBundle(userId, bundle);
     }
 
-    // Get user's current tone preference
-    const currentTone = await getUserTone(userId);
-
-    // Get or generate today's bundle (arc must exist first)
-    let bundle = await getBundle(userId, todayId);
-
-    // If bundle exists but belongs to a different arc (e.g., after arc completion),
-    // use the bundle's arc for context so user sees correct day-in-arc
-    if (bundle && bundle.arcId !== arc.id) {
-      const bundleArc = await getArc(userId, bundle.arcId);
-      if (bundleArc) {
-        arc = bundleArc;
-      }
-    }
-
-    if (!bundle) {
-      bundle = await generateDailyBundle(userId, todayId, currentTone);
-    }
-
-    // Get conversation if any
-    const conversation = await getConversation(userId, todayId);
-
-    // Calculate dayInArc: for draft bundles, add 1 to match the framing text
-    // (framing is generated with count+1 since it's for the "new" day)
-    let dayInArc = await calculateDayInArc(userId, arc);
-    if (bundle.status === 'draft') {
-      dayInArc += 1;
-    }
+    const conversation = await getConversation(userId, bundle.id);
 
     const response: TodayResponse = {
-      bundle,
+      bundle: bundle as DailyBundle,
       conversation,
       arc,
-      dayInArc,
-      currentTone,
+      dayInArc: bundle.dayInArc,
     };
-
     res.json(response);
   } catch (error) {
-    console.error('Error in GET /api/today:', error);
+    console.error('[Today] Error in GET /api/today:', error);
     res.status(500).json({ error: getErrorMessage(error) });
   }
 }

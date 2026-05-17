@@ -1,27 +1,42 @@
 import { Timestamp } from 'firebase-admin/firestore';
 
-// Re-export tone types for convenience
-export type { ToneId, ToneDefinition } from '../tones';
+// ---------------------------------------------------------------------------
+// Seasons
+// ---------------------------------------------------------------------------
+
+export const ARCS_PER_SEASON = 12;
+export const ARC_DURATION_DAYS = 7;
+
+export interface Season {
+  id: string;
+  seasonNumber: number;
+  createdAt: Timestamp;
+  status: 'active' | 'completed';
+}
+
+// ---------------------------------------------------------------------------
+// Arcs
+// ---------------------------------------------------------------------------
 
 export interface Arc {
   id: string;
+  seasonId: string;
+  orderInSeason: number; // 1-12
+  status: 'planned' | 'active' | 'completed';
   theme: string;
   description: string;
   shortDescription: string; // One-sentence summary for UI display
-  startDate: Timestamp;
-  targetDurationDays: number;
-  currentPhase: 'early' | 'middle' | 'late';
+  targetDurationDays: number; // Fixed at 7
+  startDate?: Timestamp; // Display metadata only
   completedDate?: Timestamp;
 }
 
-export interface ArcCompletionData {
-  summary: string;
-  nextArc: {
-    theme: string;
-    description: string;
-    shortDescription: string;
-  };
-}
+// Phase is derived, not stored
+export type ArcPhase = 'early' | 'middle' | 'late';
+
+// ---------------------------------------------------------------------------
+// Bundles
+// ---------------------------------------------------------------------------
 
 export interface SuggestedReading {
   title: string;
@@ -30,16 +45,15 @@ export interface SuggestedReading {
 }
 
 export interface DailyBundle {
-  id: string; // Format: YYYY-MM-DD
-  date: Timestamp;
+  id: string; // Auto-generated id; identity is (arcId, dayInArc)
   arcId: string;
-  status: 'draft' | 'delivered'; // Draft until user sends first message
+  dayInArc: number; // 1-7
+  engaged: boolean; // True once the user sends their first message
+  createdAt: Timestamp;
   music: {
     title: string;
     artist: string;
-    composer?: string;   // For classical: the composer (e.g., "Arvo Pärt")
-    performer?: string;  // For classical: the performer (e.g., "Yo-Yo Ma")
-    appleMusicUrl: string;
+    youtubeUrl: string;
   };
   image: {
     title: string;
@@ -54,9 +68,12 @@ export interface DailyBundle {
     author: string;
   };
   framingText: string;
-  tone?: import('../tones').ToneId; // Tone used to generate framing text
   suggestedReading?: SuggestedReading;
 }
+
+// ---------------------------------------------------------------------------
+// Exposures
+// ---------------------------------------------------------------------------
 
 export interface Exposure {
   id: string;
@@ -67,37 +84,47 @@ export interface Exposure {
   arcId: string;
 }
 
+// ---------------------------------------------------------------------------
+// Conversations
+// ---------------------------------------------------------------------------
+
 export interface ConversationMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Timestamp;
 }
 
-export interface ToneChange {
-  messageIndex: number; // Index in messages array where tone change occurred
-  tone: import('../tones').ToneId;
-}
-
 export interface Conversation {
-  id: string; // Same as bundle ID (YYYY-MM-DD)
+  id: string; // Same as bundle id
   bundleId: string;
   messages: ConversationMessage[];
   lastActivity: Timestamp;
   sessionEnded: boolean;
-  initialTone?: import('../tones').ToneId; // Tone at conversation start
-  toneChanges?: ToneChange[]; // Mid-conversation tone changes
 }
+
+// ---------------------------------------------------------------------------
+// Insights (conversational continuity only)
+// ---------------------------------------------------------------------------
 
 export interface SessionInsights {
   id: string;
   date: Timestamp;
   arcId: string;
-  meaningfulConnections: string[];
-  revealedInterests: string[];
   personalContext: string[];
-  revisitLater: string[];
   rawSummary: string;
 }
+
+// Light, stable user profile derived at season boundaries
+export interface UserMemoryProfile {
+  intellectualLeanings: string[]; // Domains / angles the user gravitates toward
+  notes: string; // A short freeform paragraph of stable observations
+  derivedAt: Timestamp;
+  fromSeasonNumber: number;
+}
+
+// ---------------------------------------------------------------------------
+// Reactions
+// ---------------------------------------------------------------------------
 
 export interface UserReaction {
   id: string;
@@ -108,55 +135,61 @@ export interface UserReaction {
   notes?: string;
 }
 
+// ---------------------------------------------------------------------------
 // LLM response types
-export interface LLMBundleSelection {
+// ---------------------------------------------------------------------------
+
+// Season planning: the model returns 12 arcs.
+export interface LLMSeasonPlan {
+  arcs: Array<{
+    theme: string;
+    description: string;
+    shortDescription: string;
+  }>;
+}
+
+// Bundle artifact selection via tool-use / web search.
+export interface LLMArtifactSelection {
   music: {
     title: string;
     artist: string;
-    composer?: string;     // For classical: the composer (e.g., "Arvo Pärt")
-    performer?: string;    // For classical: the performer (e.g., "Yo-Yo Ma")
-    isClassical?: boolean; // Hint for search strategy
-    searchQuery: string;
+    youtubeUrl: string;
   };
   image: {
     title: string;
-    artist: string;
-    searchQuery: string;
+    artist?: string;
+    year?: string;
+    sourceUrl: string;
+    imageUrl: string;
   };
   text: {
     content: string;
     source: string;
     author: string;
   };
-  // Note: framingText is generated separately after artifacts are validated
 }
 
-export interface LLMInsightsExtraction {
-  meaningfulConnections: string[];
-  revealedInterests: string[];
-  personalContext: string[];
-  revisitLater: string[];
-  rawSummary: string;
-  suggestedReading: {
-    title: string;
-    searchQuery: string;
-    rationale: string;
-  } | null;
+// Light user profile derivation at a season boundary.
+export interface LLMUserProfile {
+  intellectualLeanings: string[];
+  notes: string;
 }
 
+// ---------------------------------------------------------------------------
 // API response types
+// ---------------------------------------------------------------------------
+
 export interface TodayResponse {
   bundle: DailyBundle;
   conversation: Conversation | null;
   arc: Arc;
   dayInArc: number;
-  currentTone: import('../tones').ToneId; // User's current tone preference
 }
 
 export interface MessageRequest {
   message: string;
-  date: string;
-  forceComplete?: boolean;
+  date?: string; // Legacy / optional; bundle resolution is arc-based
+  bundleId?: string;
 }
 
 export interface MessageResponse {
@@ -164,13 +197,21 @@ export interface MessageResponse {
   conversation: Conversation;
   sessionShouldEnd?: boolean;
   arcShouldEnd?: boolean;
-  incompleteMessageDetected?: boolean;
 }
 
 export interface ReactRequest {
   artifactType?: 'music' | 'image' | 'text' | 'overall';
   reactionType: 'awe' | 'interest' | 'resistance' | 'familiarity' | 'freeform';
   notes?: string;
+}
+
+export interface ArcCompletionData {
+  summary: string;
+  nextArc: {
+    theme: string;
+    description: string;
+    shortDescription: string;
+  } | null;
 }
 
 export interface EndSessionResponse {
@@ -182,4 +223,20 @@ export interface EndSessionResponse {
 export interface HistoryQuery {
   limit?: number;
   before?: string;
+}
+
+export interface SeasonResponse {
+  season: Season;
+  arcs: Arc[];
+}
+
+export interface SeasonSteerRequest {
+  message: string;
+  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
+}
+
+export interface SeasonSteerResponse {
+  response: string;
+  season?: Season;
+  arcs?: Arc[];
 }

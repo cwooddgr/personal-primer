@@ -2,29 +2,22 @@ import { onRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import { anthropicApiKey } from './services/anthropic';
-import { googleSearchApiKey, googleSearchCx } from './services/linkValidator';
 import { handleGetToday } from './api/today';
 import { handlePostMessage } from './api/message';
 import { handleEndSession } from './api/endSession';
 import { handleReact } from './api/react';
-import { handleGetArc } from './api/arc';
 import { handleGetHistory } from './api/history';
 import { handleGetConversation } from './api/conversationHistory';
-import { handleRefineArcMessage } from './api/refineArc';
 import { handleEndArcEarly } from './api/endArcEarly';
-import { handleRegister, handleForgotPassword, handleResendVerification } from './api/auth';
+import { handleGetSeason, handleSteerSeasonMessage } from './api/season';
+import {
+  handleRegister,
+  handleForgotPassword,
+  handleResendVerification,
+} from './api/auth';
 import { checkInactiveSessions } from './scheduled/inactivityCheck';
 import { verifyAuth } from './middleware/auth';
-import {
-  ensureUserExists,
-  getUserProfile,
-  markAboutAsSeen,
-  setUserTone,
-  getConversation,
-  recordToneChange,
-  validateDateId,
-} from './utils/firestore';
-import { getAllTones, isValidTone, DEFAULT_TONE, ToneId } from './tones';
+import { ensureUserExists, getUserProfile, markAboutAsSeen } from './utils/firestore';
 
 // Set global options
 setGlobalOptions({
@@ -35,8 +28,9 @@ setGlobalOptions({
 // Main API function
 export const api = onRequest(
   {
-    secrets: [anthropicApiKey, googleSearchApiKey, googleSearchCx],
+    secrets: [anthropicApiKey],
     cors: true,
+    timeoutSeconds: 300,
   },
   async (req, res) => {
     const path = req.path;
@@ -68,7 +62,7 @@ export const api = onRequest(
       return handleResendVerification(req, res, userId, email);
     }
 
-    // Route handling - pass userId to all handlers
+    // Today
     if (path === '/api/today' && method === 'GET') {
       return handleGetToday(req, res, userId);
     }
@@ -85,25 +79,31 @@ export const api = onRequest(
       return handleReact(req, res, userId);
     }
 
-    if (path === '/api/arc' && method === 'GET') {
-      return handleGetArc(req, res, userId);
+    // Season
+    if (path === '/api/season' && method === 'GET') {
+      return handleGetSeason(req, res, userId);
     }
 
+    if (path === '/api/season/steer/message' && method === 'POST') {
+      return handleSteerSeasonMessage(req, res, userId);
+    }
+
+    // History
     if (path === '/api/history' && method === 'GET') {
       return handleGetHistory(req, res, userId);
     }
 
-    // Match /api/history/:date/conversation pattern
-    if (path.match(/^\/api\/history\/\d{4}-\d{2}-\d{2}\/conversation$/) && method === 'GET') {
+    // Match /api/history/:bundleId/conversation pattern
+    if (
+      path.match(/^\/api\/history\/[^/]+\/conversation$/) &&
+      method === 'GET'
+    ) {
       return handleGetConversation(req, res, userId);
     }
 
+    // Arc end-early
     if (path === '/api/arc/end-early' && method === 'POST') {
       return handleEndArcEarly(req, res, userId);
-    }
-
-    if (path === '/api/arc/refine/message' && method === 'POST') {
-      return handleRefineArcMessage(req, res, userId);
     }
 
     // User profile endpoints
@@ -116,8 +116,7 @@ export const api = onRequest(
         }
         res.json({
           hasSeenAbout: profile.hasSeenAbout,
-          currentTone: profile.currentTone || DEFAULT_TONE,
-          hasSelectedTone: profile.hasSelectedTone || false,
+          voicePreference: profile.voicePreference ?? null,
         });
       } catch (error) {
         console.error('[User] Get profile error:', error);
@@ -133,59 +132,6 @@ export const api = onRequest(
       } catch (error) {
         console.error('[User] Mark about seen error:', error);
         res.status(500).json({ error: 'Failed to update profile' });
-      }
-      return;
-    }
-
-    // Tone endpoints
-    if (path === '/api/tones' && method === 'GET') {
-      const tones = getAllTones().map(t => ({
-        id: t.id,
-        name: t.name,
-        shortName: t.shortName,
-        description: t.description,
-      }));
-      res.json({ tones, default: DEFAULT_TONE });
-      return;
-    }
-
-    if (path === '/api/user/tone' && method === 'POST') {
-      try {
-        const { tone } = req.body as { tone?: string };
-        if (!tone || !isValidTone(tone)) {
-          res.status(400).json({ error: 'Invalid tone' });
-          return;
-        }
-        await setUserTone(userId, tone as ToneId);
-        res.json({ success: true, tone });
-      } catch (error) {
-        console.error('[User] Set tone error:', error);
-        res.status(500).json({ error: 'Failed to set tone' });
-      }
-      return;
-    }
-
-    if (path === '/api/today/tone' && method === 'POST') {
-      try {
-        const { tone, date } = req.body as { tone?: string; date?: string };
-        if (!tone || !isValidTone(tone)) {
-          res.status(400).json({ error: 'Invalid tone' });
-          return;
-        }
-        const bundleId = validateDateId(date);
-        const conversation = await getConversation(userId, bundleId);
-
-        // Record the tone change at the current message count
-        const messageIndex = conversation?.messages.length || 0;
-        await recordToneChange(userId, bundleId, tone as ToneId, messageIndex);
-
-        // Also update user's default tone for future conversations
-        await setUserTone(userId, tone as ToneId);
-
-        res.json({ success: true, tone, messageIndex });
-      } catch (error) {
-        console.error('[Tone] Change error:', error);
-        res.status(500).json({ error: 'Failed to change tone' });
       }
       return;
     }

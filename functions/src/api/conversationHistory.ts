@@ -1,54 +1,64 @@
 import { Request, Response } from 'express';
-import { getConversation, validateDateId, getBundle, getArc, getArcBundles } from '../utils/firestore';
+import { getConversation, getBundle, getArc, getArcBundles } from '../utils/firestore';
 
-export async function handleGetConversation(req: Request, res: Response, userId: string): Promise<void> {
+/**
+ * GET /api/history/:bundleId/conversation
+ *
+ * Identity is now bundle-based. For best-effort legacy support, the path
+ * segment may also be a legacy date-keyed bundle id (YYYY-MM-DD) — both are
+ * looked up the same way since they are document ids.
+ */
+export async function handleGetConversation(
+  req: Request,
+  res: Response,
+  userId: string
+): Promise<void> {
   try {
-    // Extract date from path: /api/history/:date/conversation
     const pathParts = req.path.split('/');
-    const dateIndex = pathParts.indexOf('history') + 1;
-    const date = pathParts[dateIndex];
+    const historyIndex = pathParts.indexOf('history');
+    const bundleId = pathParts[historyIndex + 1];
 
-    const validatedDate = validateDateId(date);
+    if (!bundleId) {
+      res.status(400).json({ error: 'Bundle identifier is required' });
+      return;
+    }
 
-    // Fetch conversation, bundle, and arc info
     const [conversation, bundle] = await Promise.all([
-      getConversation(userId, validatedDate),
-      getBundle(userId, validatedDate),
+      getConversation(userId, bundleId),
+      getBundle(userId, bundleId),
     ]);
 
     if (!bundle) {
-      res.status(404).json({ error: 'Bundle not found for this date' });
+      res.status(404).json({ error: 'Bundle not found' });
       return;
     }
 
     const arc = await getArc(userId, bundle.arcId);
 
-    // Calculate day in arc (position of this bundle within the arc)
-    let dayInArc = 1;
-    if (arc) {
+    // Day in arc: prefer the bundle's own field; fall back to position.
+    let dayInArc = bundle.dayInArc || 1;
+    if (!bundle.dayInArc && arc) {
       const arcBundles = await getArcBundles(userId, arc.id);
-      const bundleIndex = arcBundles.findIndex(b => b.id === bundle.id);
-      dayInArc = bundleIndex >= 0 ? bundleIndex + 1 : 1;
+      const idx = arcBundles.findIndex(b => b.id === bundle.id);
+      dayInArc = idx >= 0 ? idx + 1 : 1;
     }
 
     res.json({
       conversation,
       bundle,
-      arc: arc ? {
-        id: arc.id,
-        theme: arc.theme,
-        description: arc.description,
-        shortDescription: arc.shortDescription,
-        targetDurationDays: arc.targetDurationDays,
-      } : null,
+      arc: arc
+        ? {
+            id: arc.id,
+            theme: arc.theme,
+            description: arc.description,
+            shortDescription: arc.shortDescription,
+            targetDurationDays: arc.targetDurationDays,
+          }
+        : null,
       dayInArc,
     });
   } catch (error) {
-    if (error instanceof Error && error.message.includes('Date')) {
-      res.status(400).json({ error: error.message });
-      return;
-    }
-    console.error('Error in GET /api/history/:date/conversation:', error);
+    console.error('[ConversationHistory] Error:', error);
     res.status(500).json({ error: 'Failed to get conversation' });
   }
 }

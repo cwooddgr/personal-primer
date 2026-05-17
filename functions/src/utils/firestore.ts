@@ -2,14 +2,17 @@ import * as admin from 'firebase-admin';
 import { Timestamp } from 'firebase-admin/firestore';
 import {
   Arc,
+  Season,
   DailyBundle,
   SuggestedReading,
   Exposure,
   Conversation,
   SessionInsights,
   UserReaction,
+  UserMemoryProfile,
+  ARC_DURATION_DAYS,
+  ArcPhase,
 } from '../types';
-import { ToneId, DEFAULT_TONE } from '../tones';
 
 // Initialize Firebase Admin if not already initialized
 if (!admin.apps.length) {
@@ -22,6 +25,7 @@ const db = admin.firestore();
 function getUserCollections(userId: string) {
   const userDoc = db.collection('users').doc(userId);
   return {
+    seasons: userDoc.collection('seasons'),
     arcs: userDoc.collection('arcs'),
     dailyBundles: userDoc.collection('dailyBundles'),
     exposures: userDoc.collection('exposures'),
@@ -37,27 +41,34 @@ export const globalCollections = {
   users: db.collection('users'),
 };
 
+// ---------------------------------------------------------------------------
 // Date helpers
-export function validateDateId(dateStr: string | undefined): string {
-  if (!dateStr) {
-    throw new Error('Date parameter is required');
-  }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    throw new Error('Invalid date format. Expected YYYY-MM-DD');
-  }
-  return dateStr;
-}
+// ---------------------------------------------------------------------------
 
 export function getTodayId(): string {
   const now = new Date();
-  return now.toISOString().split('T')[0];
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+    now.getDate()
+  ).padStart(2, '0')}`;
 }
 
 export function toTimestamp(date: Date): Timestamp {
   return Timestamp.fromDate(date);
 }
 
+// Returns true if the timestamp falls on an earlier calendar day than today.
+function isFromPriorDay(ts: Timestamp): boolean {
+  const created = ts.toDate();
+  const now = new Date();
+  const createdDay = `${created.getFullYear()}-${created.getMonth()}-${created.getDate()}`;
+  const nowDay = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+  return createdDay !== nowDay;
+}
+
+// ---------------------------------------------------------------------------
 // Whitelist operations
+// ---------------------------------------------------------------------------
+
 export async function isEmailAllowed(email: string): Promise<boolean> {
   const normalizedEmail = email.toLowerCase().trim();
   const doc = await globalCollections.allowedEmails.doc(normalizedEmail).get();
@@ -73,24 +84,85 @@ export async function addAllowedEmail(email: string, addedBy?: string): Promise<
   });
 }
 
+// ---------------------------------------------------------------------------
+// Season operations
+// ---------------------------------------------------------------------------
+
+export async function getActiveSeason(userId: string): Promise<Season | null> {
+  const collections = getUserCollections(userId);
+  const snapshot = await collections.seasons
+    .where('status', '==', 'active')
+    .limit(1)
+    .get();
+  if (snapshot.empty) return null;
+  const doc = snapshot.docs[0];
+  return { id: doc.id, ...doc.data() } as Season;
+}
+
+export async function getSeason(userId: string, seasonId: string): Promise<Season | null> {
+  const collections = getUserCollections(userId);
+  const doc = await collections.seasons.doc(seasonId).get();
+  if (!doc.exists) return null;
+  return { id: doc.id, ...doc.data() } as Season;
+}
+
+export async function getAllSeasons(userId: string): Promise<Season[]> {
+  const collections = getUserCollections(userId);
+  const snapshot = await collections.seasons.orderBy('seasonNumber', 'asc').get();
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Season));
+}
+
+/** All arcs for the user, across every season. */
+export async function getAllArcs(userId: string): Promise<Arc[]> {
+  const collections = getUserCollections(userId);
+  const snapshot = await collections.arcs.get();
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Arc));
+}
+
+export async function getLatestSeasonNumber(userId: string): Promise<number> {
+  const collections = getUserCollections(userId);
+  const snapshot = await collections.seasons
+    .orderBy('seasonNumber', 'desc')
+    .limit(1)
+    .get();
+  if (snapshot.empty) return 0;
+  return (snapshot.docs[0].data().seasonNumber as number) || 0;
+}
+
+export async function createSeason(
+  userId: string,
+  seasonNumber: number
+): Promise<Season> {
+  const collections = getUserCollections(userId);
+  const id = `season-${seasonNumber}-${Date.now()}`;
+  const season: Season = {
+    id,
+    seasonNumber,
+    createdAt: toTimestamp(new Date()),
+    status: 'active',
+  };
+  await collections.seasons.doc(id).set(season);
+  return season;
+}
+
+export async function completeSeason(userId: string, seasonId: string): Promise<void> {
+  const collections = getUserCollections(userId);
+  await collections.seasons.doc(seasonId).update({ status: 'completed' });
+}
+
+// ---------------------------------------------------------------------------
 // Arc operations
+// ---------------------------------------------------------------------------
+
 export async function getActiveArc(userId: string): Promise<Arc | null> {
   const collections = getUserCollections(userId);
   const snapshot = await collections.arcs
-    .orderBy('startDate', 'desc')
-    .limit(10)
+    .where('status', '==', 'active')
+    .limit(1)
     .get();
-
   if (snapshot.empty) return null;
-
-  for (const doc of snapshot.docs) {
-    const data = doc.data();
-    if (!data.completedDate) {
-      return { id: doc.id, ...data } as Arc;
-    }
-  }
-
-  return null;
+  const doc = snapshot.docs[0];
+  return { id: doc.id, ...doc.data() } as Arc;
 }
 
 export async function getArc(userId: string, arcId: string): Promise<Arc | null> {
@@ -100,92 +172,107 @@ export async function getArc(userId: string, arcId: string): Promise<Arc | null>
   return { id: doc.id, ...doc.data() } as Arc;
 }
 
-export async function updateArcPhase(userId: string, arcId: string, phase: Arc['currentPhase']): Promise<void> {
+export async function getSeasonArcs(userId: string, seasonId: string): Promise<Arc[]> {
   const collections = getUserCollections(userId);
-  await collections.arcs.doc(arcId).update({ currentPhase: phase });
-}
-
-export async function completeArc(userId: string, arcId: string): Promise<void> {
-  const collections = getUserCollections(userId);
-  await collections.arcs.doc(arcId).update({
-    completedDate: toTimestamp(new Date()),
-  });
-}
-
-export async function updateArc(userId: string, arcId: string, updates: Partial<Arc>): Promise<void> {
-  const collections = getUserCollections(userId);
-  await collections.arcs.doc(arcId).update(updates);
+  const snapshot = await collections.arcs
+    .where('seasonId', '==', seasonId)
+    .get();
+  const arcs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Arc));
+  arcs.sort((a, b) => a.orderInSeason - b.orderInSeason);
+  return arcs;
 }
 
 export async function createArc(userId: string, arc: Omit<Arc, 'id'>): Promise<Arc> {
   const collections = getUserCollections(userId);
-  const id = `arc-${Date.now()}`;
+  const id = `arc-${arc.seasonId}-${arc.orderInSeason}-${Date.now()}`;
   const newArc: Arc = { id, ...arc };
   await collections.arcs.doc(id).set(newArc);
   return newArc;
 }
 
-export async function createWelcomeArc(userId: string): Promise<Arc> {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  return createArc(userId, {
-    theme: 'Beginnings',
-    description: 'Every journey starts somewhere. This week we explore the creative spark of first encounters—the tentative opening notes, the initial brushstroke, the words that break silence. These artifacts invite you to notice how things come into being, and perhaps to reflect on your own beginnings with Primer.',
-    shortDescription: 'Exploring the creative spark of first encounters.',
-    startDate: toTimestamp(today),
-    targetDurationDays: 7,
-    currentPhase: 'early',
-  });
+export async function updateArc(
+  userId: string,
+  arcId: string,
+  updates: Partial<Arc>
+): Promise<void> {
+  const collections = getUserCollections(userId);
+  await collections.arcs.doc(arcId).update(updates);
 }
 
-export async function getPendingArc(userId: string): Promise<Arc | null> {
+export async function deleteArc(userId: string, arcId: string): Promise<void> {
   const collections = getUserCollections(userId);
-  const snapshot = await collections.arcs
-    .orderBy('startDate', 'desc')
-    .limit(5)
-    .get();
+  await collections.arcs.doc(arcId).delete();
+}
 
-  if (snapshot.empty) return null;
+/**
+ * Marks an arc completed and activates the next-order planned arc in the same
+ * season. Returns the newly activated arc, or null if the season is finished.
+ */
+export async function completeArcAndAdvance(
+  userId: string,
+  arc: Arc
+): Promise<Arc | null> {
+  await updateArc(userId, arc.id, {
+    status: 'completed',
+    completedDate: toTimestamp(new Date()),
+  });
 
-  for (const doc of snapshot.docs) {
-    const arc = { id: doc.id, ...doc.data() } as Arc;
-    const bundlesSnapshot = await collections.dailyBundles
-      .where('arcId', '==', arc.id)
-      .limit(1)
-      .get();
-
-    if (bundlesSnapshot.empty) {
-      return arc;
-    }
+  const seasonArcs = await getSeasonArcs(userId, arc.seasonId);
+  const next = seasonArcs.find(
+    a => a.status === 'planned' && a.orderInSeason > arc.orderInSeason
+  );
+  if (!next) {
+    return null;
   }
 
-  return null;
+  await updateArc(userId, next.id, {
+    status: 'active',
+    startDate: toTimestamp(new Date()),
+  });
+  return { ...next, status: 'active' };
 }
 
-export async function getArcBundles(userId: string, arcId: string): Promise<DailyBundle[]> {
+// ---------------------------------------------------------------------------
+// Phase helper (derived from dayInArc)
+// ---------------------------------------------------------------------------
+
+export function determinePhase(
+  dayInArc: number,
+  targetDuration: number = ARC_DURATION_DAYS
+): ArcPhase {
+  const progress = dayInArc / targetDuration;
+  if (progress <= 0.33) return 'early';
+  if (progress <= 0.66) return 'middle';
+  return 'late';
+}
+
+// ---------------------------------------------------------------------------
+// Bundle operations — keyed by (arcId, dayInArc)
+// ---------------------------------------------------------------------------
+
+/**
+ * Count of engaged bundles in an arc. Drives arc progression — skipping a day
+ * never consumes a slot.
+ */
+export async function countEngagedBundles(userId: string, arcId: string): Promise<number> {
   const collections = getUserCollections(userId);
-  // Only return delivered bundles (exclude drafts that were never engaged with)
   const snapshot = await collections.dailyBundles
     .where('arcId', '==', arcId)
-    .where('status', '==', 'delivered')
-    .orderBy('date', 'asc')
+    .where('engaged', '==', true)
+    .count()
     .get();
-
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DailyBundle));
+  return snapshot.data().count;
 }
 
-export async function getArcInsights(userId: string, arcId: string): Promise<SessionInsights[]> {
-  const collections = getUserCollections(userId);
-  const snapshot = await collections.sessionInsights
-    .where('arcId', '==', arcId)
-    .orderBy('date', 'asc')
-    .get();
-
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SessionInsights));
+/**
+ * Day in arc for the *current* encounter: count of engaged bundles + 1,
+ * clamped to the arc duration.
+ */
+export async function calculateDayInArc(userId: string, arc: Arc): Promise<number> {
+  const engaged = await countEngagedBundles(userId, arc.id);
+  return Math.min(engaged + 1, arc.targetDurationDays);
 }
 
-// Bundle operations
 export async function getBundle(userId: string, bundleId: string): Promise<DailyBundle | null> {
   const collections = getUserCollections(userId);
   const doc = await collections.dailyBundles.doc(bundleId).get();
@@ -193,28 +280,116 @@ export async function getBundle(userId: string, bundleId: string): Promise<Daily
   return { id: doc.id, ...doc.data() } as DailyBundle;
 }
 
+export async function getBundleByArcDay(
+  userId: string,
+  arcId: string,
+  dayInArc: number
+): Promise<DailyBundle | null> {
+  const collections = getUserCollections(userId);
+  const snapshot = await collections.dailyBundles
+    .where('arcId', '==', arcId)
+    .where('dayInArc', '==', dayInArc)
+    .limit(1)
+    .get();
+  if (snapshot.empty) return null;
+  const doc = snapshot.docs[0];
+  return { id: doc.id, ...doc.data() } as DailyBundle;
+}
+
+/**
+ * The single un-engaged bundle for the active arc, if one exists.
+ */
+export async function getCurrentUnengagedBundle(
+  userId: string,
+  arcId: string
+): Promise<DailyBundle | null> {
+  const collections = getUserCollections(userId);
+  const snapshot = await collections.dailyBundles
+    .where('arcId', '==', arcId)
+    .where('engaged', '==', false)
+    .get();
+  if (snapshot.empty) return null;
+  // There should be at most one; if more, pick the most recent.
+  const bundles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DailyBundle));
+  bundles.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
+  return bundles[0];
+}
+
+export function isBundleStale(bundle: DailyBundle): boolean {
+  return isFromPriorDay(bundle.createdAt);
+}
+
+/**
+ * The most recently created bundle for an arc (engaged or not). Used for
+ * session-end resolution after a bundle has already been engaged.
+ */
+export async function getLatestBundleForArc(
+  userId: string,
+  arcId: string
+): Promise<DailyBundle | null> {
+  const collections = getUserCollections(userId);
+  const snapshot = await collections.dailyBundles
+    .where('arcId', '==', arcId)
+    .get();
+  if (snapshot.empty) return null;
+  const bundles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DailyBundle));
+  bundles.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
+  return bundles[0];
+}
+
 export async function createBundle(userId: string, bundle: DailyBundle): Promise<void> {
   const collections = getUserCollections(userId);
   await collections.dailyBundles.doc(bundle.id).set(bundle);
 }
 
-export async function getBundleHistory(userId: string, limit: number = 30, before?: string): Promise<DailyBundle[]> {
-  const collections = getUserCollections(userId);
-  // Only return delivered bundles (exclude drafts that were never engaged with)
-  let query = collections.dailyBundles
-    .where('status', '==', 'delivered')
-    .orderBy('date', 'desc')
-    .limit(limit);
-
-  if (before) {
-    const beforeDoc = await collections.dailyBundles.doc(before).get();
-    if (beforeDoc.exists) {
-      query = query.startAfter(beforeDoc);
-    }
+/**
+ * Overwrite a bundle's artifact/framing content in place (same id, dayInArc).
+ */
+export async function replaceBundleContent(
+  userId: string,
+  bundleId: string,
+  content: Pick<DailyBundle, 'music' | 'image' | 'text' | 'framingText'> & {
+    createdAt: Timestamp;
   }
+): Promise<void> {
+  const collections = getUserCollections(userId);
+  await collections.dailyBundles.doc(bundleId).update({
+    music: content.music,
+    image: content.image,
+    text: content.text,
+    framingText: content.framingText,
+    createdAt: content.createdAt,
+  });
+}
 
-  const snapshot = await query.get();
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DailyBundle));
+export async function getArcBundles(userId: string, arcId: string): Promise<DailyBundle[]> {
+  const collections = getUserCollections(userId);
+  const snapshot = await collections.dailyBundles
+    .where('arcId', '==', arcId)
+    .where('engaged', '==', true)
+    .get();
+  const bundles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DailyBundle));
+  bundles.sort((a, b) => (a.dayInArc || 0) - (b.dayInArc || 0));
+  return bundles;
+}
+
+export async function getBundleHistory(
+  userId: string,
+  limit: number = 30
+): Promise<DailyBundle[]> {
+  const collections = getUserCollections(userId);
+  // Engaged bundles, newest first. Legacy bundles use 'status' instead of
+  // 'engaged'; fetch broadly then filter for best-effort legacy support.
+  const snapshot = await collections.dailyBundles
+    .orderBy('createdAt', 'desc')
+    .limit(limit * 3)
+    .get();
+
+  const bundles = snapshot.docs
+    .map(doc => ({ id: doc.id, ...doc.data() } as DailyBundle & { status?: string }))
+    .filter(b => b.engaged === true || b.status === 'delivered');
+
+  return bundles.slice(0, limit);
 }
 
 export async function updateBundleSuggestedReading(
@@ -226,39 +401,35 @@ export async function updateBundleSuggestedReading(
   await collections.dailyBundles.doc(bundleId).update({ suggestedReading });
 }
 
-// Mark a bundle as delivered and create exposure records
-// Called when user sends their first message (intentional engagement)
-export async function deliverBundle(userId: string, bundle: DailyBundle): Promise<void> {
-  if (bundle.status === 'delivered') {
-    return; // Already delivered
+/**
+ * Mark a bundle engaged and create exposure records. Called when the user
+ * sends their first message (intentional engagement). Idempotent.
+ */
+export async function engageBundle(userId: string, bundle: DailyBundle): Promise<void> {
+  if (bundle.engaged) {
+    return;
   }
 
   const collections = getUserCollections(userId);
+  await collections.dailyBundles.doc(bundle.id).update({ engaged: true });
 
-  // Mark as delivered
-  await collections.dailyBundles.doc(bundle.id).update({ status: 'delivered' });
-
-  // Create exposure records
   const now = toTimestamp(new Date());
   const exposureBase = {
     dateShown: now,
     arcId: bundle.arcId,
   };
 
-  // For music, use composer as creator if available (for classical music)
-  const musicCreator = bundle.music.composer || bundle.music.artist;
-
   await Promise.all([
     createExposure(userId, {
       ...exposureBase,
       artifactType: 'music',
       artifactIdentifier: `${bundle.music.title} - ${bundle.music.artist}`,
-      creator: musicCreator,
+      creator: bundle.music.artist,
     }),
     createExposure(userId, {
       ...exposureBase,
       artifactType: 'image',
-      artifactIdentifier: `${bundle.image.title} - ${bundle.image.artist}`,
+      artifactIdentifier: `${bundle.image.title} - ${bundle.image.artist || ''}`,
       creator: bundle.image.artist || '',
     }),
     createExposure(userId, {
@@ -270,8 +441,14 @@ export async function deliverBundle(userId: string, bundle: DailyBundle): Promis
   ]);
 }
 
+// ---------------------------------------------------------------------------
 // Exposure operations
-export async function getRecentExposures(userId: string, days: number = 30): Promise<Exposure[]> {
+// ---------------------------------------------------------------------------
+
+export async function getRecentExposures(
+  userId: string,
+  days: number = 30
+): Promise<Exposure[]> {
   const collections = getUserCollections(userId);
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
@@ -284,20 +461,32 @@ export async function getRecentExposures(userId: string, days: number = 30): Pro
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Exposure));
 }
 
-export async function createExposure(userId: string, exposure: Omit<Exposure, 'id'>): Promise<void> {
+export async function createExposure(
+  userId: string,
+  exposure: Omit<Exposure, 'id'>
+): Promise<void> {
   const collections = getUserCollections(userId);
   await collections.exposures.add(exposure);
 }
 
+// ---------------------------------------------------------------------------
 // Conversation operations
-export async function getConversation(userId: string, bundleId: string): Promise<Conversation | null> {
+// ---------------------------------------------------------------------------
+
+export async function getConversation(
+  userId: string,
+  bundleId: string
+): Promise<Conversation | null> {
   const collections = getUserCollections(userId);
   const doc = await collections.conversations.doc(bundleId).get();
   if (!doc.exists) return null;
   return { id: doc.id, ...doc.data() } as Conversation;
 }
 
-export async function createConversation(userId: string, conversation: Conversation): Promise<void> {
+export async function createConversation(
+  userId: string,
+  conversation: Conversation
+): Promise<void> {
   const collections = getUserCollections(userId);
   await collections.conversations.doc(conversation.id).set(conversation);
 }
@@ -311,49 +500,35 @@ export async function updateConversation(
   await collections.conversations.doc(bundleId).update(updates);
 }
 
-// Record a mid-conversation tone change
-export async function recordToneChange(
+export async function getStaleConversationsForUser(
   userId: string,
-  bundleId: string,
-  tone: ToneId,
-  messageIndex: number
-): Promise<void> {
-  const conversation = await getConversation(userId, bundleId);
-  if (!conversation) return;
-
-  const toneChanges = conversation.toneChanges || [];
-  toneChanges.push({ messageIndex, tone });
-
-  await updateConversation(userId, bundleId, { toneChanges });
-}
-
-// Get stale conversations across all users (for scheduled function)
-export async function getStaleConversationsForUser(userId: string, cutoffTime: Date): Promise<Conversation[]> {
+  cutoffTime: Date
+): Promise<Conversation[]> {
   const collections = getUserCollections(userId);
   const snapshot = await collections.conversations
     .where('sessionEnded', '==', false)
     .where('lastActivity', '<', toTimestamp(cutoffTime))
     .get();
-
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Conversation));
 }
 
-// Get all user IDs (for scheduled function)
 export async function getAllUserIds(): Promise<string[]> {
   const snapshot = await globalCollections.users.get();
   return snapshot.docs.map(doc => doc.id);
 }
 
-// User profile type
+// ---------------------------------------------------------------------------
+// User profile
+// ---------------------------------------------------------------------------
+
 export interface UserProfile {
   email: string;
   createdAt: Timestamp;
   hasSeenAbout: boolean;
-  currentTone?: ToneId;
-  hasSelectedTone?: boolean;
+  voicePreference?: string | null;
+  memoryProfile?: UserMemoryProfile | null;
 }
 
-// Ensure user document exists
 export async function ensureUserExists(userId: string, email: string): Promise<void> {
   const userDoc = globalCollections.users.doc(userId);
   const doc = await userDoc.get();
@@ -361,12 +536,11 @@ export async function ensureUserExists(userId: string, email: string): Promise<v
     await userDoc.set({
       email,
       createdAt: toTimestamp(new Date()),
-      hasSeenAbout: false, // New users haven't seen the about page
+      hasSeenAbout: false,
     });
   }
 }
 
-// Get user profile
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
   const doc = await globalCollections.users.doc(userId).get();
   if (!doc.exists) return null;
@@ -375,43 +549,50 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
   return {
     email: data?.email || '',
     createdAt: data?.createdAt || toTimestamp(new Date()),
-    // For existing users without this field, assume they've seen it
     hasSeenAbout: data?.hasSeenAbout ?? true,
-    currentTone: data?.currentTone,
-    hasSelectedTone: data?.hasSelectedTone ?? false,
+    voicePreference: data?.voicePreference ?? null,
+    memoryProfile: data?.memoryProfile ?? null,
   };
 }
 
-// Get user's current tone preference
-export async function getUserTone(userId: string): Promise<ToneId> {
-  const profile = await getUserProfile(userId);
-  return profile?.currentTone || DEFAULT_TONE;
-}
-
-// Set user's tone preference
-export async function setUserTone(userId: string, tone: ToneId): Promise<void> {
-  await globalCollections.users.doc(userId).set({
-    currentTone: tone,
-    hasSelectedTone: true,
-  }, { merge: true });
-}
-
-// Mark tone as selected (for onboarding)
-export async function markToneSelected(userId: string): Promise<void> {
-  await globalCollections.users.doc(userId).set({
-    hasSelectedTone: true,
-  }, { merge: true });
-}
-
-// Mark about page as seen
 export async function markAboutAsSeen(userId: string): Promise<void> {
-  await globalCollections.users.doc(userId).set({
-    hasSeenAbout: true,
-  }, { merge: true });
+  await globalCollections.users.doc(userId).set({ hasSeenAbout: true }, { merge: true });
 }
 
-// Session insights operations
-export async function getRecentInsights(userId: string, days: number = 14): Promise<SessionInsights[]> {
+export async function getVoicePreference(userId: string): Promise<string | null> {
+  const profile = await getUserProfile(userId);
+  return profile?.voicePreference ?? null;
+}
+
+export async function setVoicePreference(
+  userId: string,
+  voicePreference: string
+): Promise<void> {
+  await globalCollections.users.doc(userId).set({ voicePreference }, { merge: true });
+}
+
+export async function getMemoryProfile(
+  userId: string
+): Promise<UserMemoryProfile | null> {
+  const profile = await getUserProfile(userId);
+  return profile?.memoryProfile ?? null;
+}
+
+export async function setMemoryProfile(
+  userId: string,
+  memoryProfile: UserMemoryProfile
+): Promise<void> {
+  await globalCollections.users.doc(userId).set({ memoryProfile }, { merge: true });
+}
+
+// ---------------------------------------------------------------------------
+// Session insights (conversational continuity only)
+// ---------------------------------------------------------------------------
+
+export async function getRecentInsights(
+  userId: string,
+  days: number = 21
+): Promise<SessionInsights[]> {
   const collections = getUserCollections(userId);
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
@@ -424,33 +605,42 @@ export async function getRecentInsights(userId: string, days: number = 14): Prom
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SessionInsights));
 }
 
-export async function createSessionInsights(userId: string, insights: SessionInsights): Promise<void> {
+export async function getSeasonInsights(
+  userId: string,
+  arcIds: string[]
+): Promise<SessionInsights[]> {
+  if (arcIds.length === 0) return [];
+  const collections = getUserCollections(userId);
+  const result: SessionInsights[] = [];
+  // Firestore 'in' queries are capped at 30 values; chunk to be safe.
+  for (let i = 0; i < arcIds.length; i += 10) {
+    const chunk = arcIds.slice(i, i + 10);
+    const snapshot = await collections.sessionInsights
+      .where('arcId', 'in', chunk)
+      .get();
+    result.push(
+      ...snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SessionInsights))
+    );
+  }
+  return result;
+}
+
+export async function createSessionInsights(
+  userId: string,
+  insights: SessionInsights
+): Promise<void> {
   const collections = getUserCollections(userId);
   await collections.sessionInsights.doc(insights.id).set(insights);
 }
 
-// User reaction operations
-export async function createReaction(userId: string, reaction: Omit<UserReaction, 'id'>): Promise<void> {
+// ---------------------------------------------------------------------------
+// Reactions
+// ---------------------------------------------------------------------------
+
+export async function createReaction(
+  userId: string,
+  reaction: Omit<UserReaction, 'id'>
+): Promise<void> {
   const collections = getUserCollections(userId);
   await collections.userReactions.add(reaction);
-}
-
-// Arc phase calculation - counts delivered bundles for this arc
-// Only bundles where user actually engaged (sent a message) count toward arc progression
-export async function calculateDayInArc(userId: string, arc: Arc): Promise<number> {
-  const collections = getUserCollections(userId);
-  const snapshot = await collections.dailyBundles
-    .where('arcId', '==', arc.id)
-    .where('status', '==', 'delivered')
-    .count()
-    .get();
-
-  return Math.max(1, snapshot.data().count);
-}
-
-export function determinePhase(dayInArc: number, targetDuration: number): Arc['currentPhase'] {
-  const progress = dayInArc / targetDuration;
-  if (progress <= 0.33) return 'early';
-  if (progress <= 0.66) return 'middle';
-  return 'late';
 }

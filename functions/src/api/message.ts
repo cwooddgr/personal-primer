@@ -1,6 +1,14 @@
 import { Request, Response } from 'express';
 import { MessageRequest, MessageResponse } from '../types';
-import { getBundle, getActiveArc, validateDateId, getUserTone, getConversation, deliverBundle } from '../utils/firestore';
+import {
+  getBundle,
+  getCurrentUnengagedBundle,
+  getLatestBundleForArc,
+  getActiveArc,
+  getArc,
+  engageBundle,
+  getConversation,
+} from '../utils/firestore';
 import { handleMessage } from '../services/conversationManager';
 
 function getErrorMessage(error: unknown): string {
@@ -16,25 +24,16 @@ function getErrorMessage(error: unknown): string {
   return 'Failed to process message';
 }
 
-export async function handlePostMessage(req: Request, res: Response, userId: string): Promise<void> {
+export async function handlePostMessage(
+  req: Request,
+  res: Response,
+  userId: string
+): Promise<void> {
   try {
-    const { message, date, forceComplete } = req.body as MessageRequest;
+    const { message, bundleId } = req.body as MessageRequest;
 
     if (!message || typeof message !== 'string') {
       res.status(400).json({ error: 'Message is required' });
-      return;
-    }
-
-    if (!date) {
-      res.status(400).json({ error: 'Date parameter is required. Please refresh the page.' });
-      return;
-    }
-
-    const todayId = validateDateId(date);
-    const bundle = await getBundle(userId, todayId);
-
-    if (!bundle) {
-      res.status(404).json({ error: 'No bundle found for today' });
       return;
     }
 
@@ -44,38 +43,42 @@ export async function handlePostMessage(req: Request, res: Response, userId: str
       return;
     }
 
-    // Determine the current tone for this conversation
-    // Check conversation's toneChanges first (most recent), then fall back to user's default
-    const existingConversation = await getConversation(userId, todayId);
-    let tone = await getUserTone(userId);
+    // Resolve the bundle: explicit bundleId, else the current un-engaged
+    // bundle, else the latest bundle of the active arc (for follow-up messages
+    // after the bundle was already engaged by the first message).
+    let bundle = bundleId
+      ? await getBundle(userId, bundleId)
+      : (await getCurrentUnengagedBundle(userId, arc.id)) ||
+        (await getLatestBundleForArc(userId, arc.id));
 
-    if (existingConversation?.toneChanges?.length) {
-      // Use the most recent tone change
-      tone = existingConversation.toneChanges[existingConversation.toneChanges.length - 1].tone;
-    } else if (existingConversation?.initialTone) {
-      // Use the conversation's initial tone
-      tone = existingConversation.initialTone;
+    if (!bundle) {
+      res.status(404).json({ error: 'No bundle found for today' });
+      return;
     }
 
-    // On first message, deliver the bundle (marks as delivered + creates exposures)
-    // This ensures only intentional engagement counts toward arc progression
+    // The bundle's arc drives the conversation context (it may be a prior arc
+    // if the user is finishing a conversation after the arc advanced).
+    const bundleArc = (await getArc(userId, bundle.arcId)) || arc;
+
+    // First message marks the bundle engaged and creates exposures.
+    const existingConversation = await getConversation(userId, bundle.id);
     if (!existingConversation) {
-      await deliverBundle(userId, bundle);
+      await engageBundle(userId, bundle);
+      bundle = { ...bundle, engaged: true };
     }
 
-    const { response, conversation, sessionShouldEnd, arcShouldEnd, incompleteMessageDetected } = await handleMessage(userId, message, bundle, arc, tone, forceComplete);
+    const { response, conversation, sessionShouldEnd, arcShouldEnd } =
+      await handleMessage(userId, message, bundle, bundleArc);
 
     const result: MessageResponse = {
       response,
       conversation,
       sessionShouldEnd,
       arcShouldEnd,
-      incompleteMessageDetected,
     };
-
     res.json(result);
   } catch (error) {
-    console.error('Error in POST /api/today/message:', error);
+    console.error('[Message] Error in POST /api/today/message:', error);
     res.status(500).json({ error: getErrorMessage(error) });
   }
 }

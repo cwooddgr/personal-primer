@@ -3,6 +3,8 @@ import { defineSecret } from 'firebase-functions/params';
 
 const anthropicApiKey = defineSecret('ANTHROPIC_API_KEY');
 
+export const MODEL = 'claude-opus-4-7';
+
 let client: Anthropic | null = null;
 
 function getClient(): Anthropic {
@@ -19,6 +21,9 @@ export interface ChatMessage {
   content: string;
 }
 
+/**
+ * Simple text chat. Returns the concatenated text blocks of the reply.
+ */
 export async function chat(
   systemPrompt: string,
   messages: ChatMessage[],
@@ -27,7 +32,7 @@ export async function chat(
   const anthropic = getClient();
 
   const response = await anthropic.messages.create({
-    model: 'claude-opus-4-5-20251101',
+    model: MODEL,
     max_tokens: maxTokens,
     system: systemPrompt,
     messages: messages.map(m => ({
@@ -36,38 +41,38 @@ export async function chat(
     })),
   });
 
-  const textBlock = response.content.find(block => block.type === 'text');
-  if (!textBlock || textBlock.type !== 'text') {
+  const text = extractText(response.content);
+  if (!text) {
     throw new Error('No text response from Claude');
   }
-
-  return textBlock.text;
+  return text;
 }
 
-export async function generateJSON<T>(
-  systemPrompt: string,
-  userPrompt: string,
-  maxTokens: number = 4096
-): Promise<T> {
-  const response = await chat(
-    systemPrompt + '\n\nYou must respond with valid JSON only, no other text.',
-    [{ role: 'user', content: userPrompt }],
-    maxTokens
-  );
+/**
+ * Concatenate all text blocks from a content array.
+ */
+export function extractText(content: Anthropic.ContentBlock[]): string {
+  return content
+    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+    .map(b => b.text)
+    .join('\n')
+    .trim();
+}
 
-  // Extract JSON from response (handle markdown code blocks and surrounding text)
-  let jsonStr = response.trim();
+/**
+ * Extract a JSON object/array from a string that may contain surrounding text
+ * or markdown fences.
+ */
+export function extractJSON<T>(raw: string): T {
+  let jsonStr = raw.trim();
 
-  // Try to extract JSON from markdown code block first
   const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (codeBlockMatch) {
     jsonStr = codeBlockMatch[1].trim();
   } else {
-    // Fallback: find first { or [ and extract to matching closing bracket
-    const jsonStart = jsonStr.search(/[{\[]/);
+    const jsonStart = jsonStr.search(/[{[]/);
     if (jsonStart !== -1) {
       jsonStr = jsonStr.slice(jsonStart);
-      // Find the matching closing bracket
       const openChar = jsonStr[0];
       const closeChar = openChar === '{' ? '}' : ']';
       let depth = 0;
@@ -105,34 +110,185 @@ export async function generateJSON<T>(
 }
 
 /**
- * Quick check using Haiku for fast, cheap yes/no style questions.
- * Returns the raw text response.
+ * Plain JSON generation (no tools). Used for prompts that don't need web search.
  */
-export async function quickCheck(
+export async function generateJSON<T>(
   systemPrompt: string,
   userPrompt: string,
-  maxTokens: number = 256
+  maxTokens: number = 4096
+): Promise<T> {
+  const response = await chat(
+    systemPrompt + '\n\nYou must respond with valid JSON only, no other text.',
+    [{ role: 'user', content: userPrompt }],
+    maxTokens
+  );
+  return extractJSON<T>(response);
+}
+
+// ---------------------------------------------------------------------------
+// Web search server tool
+// ---------------------------------------------------------------------------
+
+const WEB_SEARCH_TOOL: Anthropic.WebSearchTool20250305 = {
+  type: 'web_search_20250305',
+  name: 'web_search',
+  max_uses: 8,
+};
+
+/**
+ * Run a request with the web_search server tool enabled. Handles the
+ * `pause_turn` stop reason by re-calling with the accumulated content until
+ * the model reaches `end_turn`. Returns the concatenated final text blocks.
+ */
+export async function chatWithWebSearch(
+  systemPrompt: string,
+  userPrompt: string,
+  maxTokens: number = 6000
 ): Promise<string> {
   const anthropic = getClient();
 
-  const response = await anthropic.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+  const messages: Anthropic.MessageParam[] = [
+    { role: 'user', content: userPrompt },
+  ];
+
+  let response = await anthropic.messages.create({
+    model: MODEL,
     max_tokens: maxTokens,
     system: systemPrompt,
-    messages: [{ role: 'user', content: userPrompt }],
+    tools: [WEB_SEARCH_TOOL],
+    messages,
   });
 
-  const textBlock = response.content.find(block => block.type === 'text');
-  if (!textBlock || textBlock.type !== 'text') {
-    throw new Error('No text response from Claude');
+  // Handle pause_turn: append assistant content and continue.
+  let guard = 0;
+  while (response.stop_reason === 'pause_turn' && guard < 5) {
+    guard++;
+    messages.push({ role: 'assistant', content: response.content });
+    response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      tools: [WEB_SEARCH_TOOL],
+      messages,
+    });
   }
 
-  return textBlock.text;
+  return extractText(response.content);
+}
+
+/**
+ * Run a web-search-backed request and extract JSON from the final text.
+ */
+export async function generateJSONWithWebSearch<T>(
+  systemPrompt: string,
+  userPrompt: string,
+  maxTokens: number = 6000
+): Promise<T> {
+  const text = await chatWithWebSearch(systemPrompt, userPrompt, maxTokens);
+  return extractJSON<T>(text);
+}
+
+// ---------------------------------------------------------------------------
+// Client-side tool-use loop
+// ---------------------------------------------------------------------------
+
+export interface ClientTool {
+  name: string;
+  description: string;
+  input_schema: Anthropic.Tool.InputSchema;
+}
+
+export type ToolHandler = (input: Record<string, unknown>) => Promise<string> | string;
+
+export interface ToolUseLoopResult {
+  text: string;
+  toolCalls: Array<{ name: string; input: Record<string, unknown> }>;
+}
+
+/**
+ * Run a conversation with client-side tools. Executes registered handlers for
+ * any `tool_use` blocks and feeds `tool_result` blocks back until the model
+ * reaches `end_turn`. Returns the final text and a record of tool calls made.
+ */
+export async function runToolUseLoop(
+  systemPrompt: string,
+  initialMessages: ChatMessage[],
+  tools: ClientTool[],
+  handlers: Record<string, ToolHandler>,
+  maxTokens: number = 2048
+): Promise<ToolUseLoopResult> {
+  const anthropic = getClient();
+
+  const messages: Anthropic.MessageParam[] = initialMessages.map(m => ({
+    role: m.role,
+    content: m.content,
+  }));
+
+  const toolDefs: Anthropic.ToolUnion[] = tools.map(t => ({
+    name: t.name,
+    description: t.description,
+    input_schema: t.input_schema,
+  }));
+
+  const toolCalls: Array<{ name: string; input: Record<string, unknown> }> = [];
+  let guard = 0;
+
+  while (guard < 8) {
+    guard++;
+
+    const response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      tools: toolDefs,
+      messages,
+    });
+
+    const toolUseBlocks = response.content.filter(
+      (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
+    );
+
+    if (response.stop_reason !== 'tool_use' || toolUseBlocks.length === 0) {
+      return { text: extractText(response.content), toolCalls };
+    }
+
+    // Record the assistant's turn (including the tool_use blocks).
+    messages.push({ role: 'assistant', content: response.content });
+
+    // Run handlers and build tool_result blocks.
+    const toolResults: Anthropic.ToolResultBlockParam[] = [];
+    for (const block of toolUseBlocks) {
+      const input = (block.input || {}) as Record<string, unknown>;
+      toolCalls.push({ name: block.name, input });
+
+      const handler = handlers[block.name];
+      let resultText = 'ok';
+      if (handler) {
+        try {
+          resultText = await handler(input);
+        } catch (err) {
+          resultText = `Error running tool: ${
+            err instanceof Error ? err.message : 'unknown error'
+          }`;
+        }
+      }
+
+      toolResults.push({
+        type: 'tool_result',
+        tool_use_id: block.id,
+        content: resultText,
+      });
+    }
+
+    messages.push({ role: 'user', content: toolResults });
+  }
+
+  // Loop guard exhausted.
+  return { text: '', toolCalls };
 }
 
 // Token estimation (rough approximation)
 export function estimateTokens(text: string): number {
-  // Rough estimate: ~4 characters per token
   return Math.ceil(text.length / 4);
 }
 

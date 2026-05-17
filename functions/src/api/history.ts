@@ -11,47 +11,45 @@ interface ArcWithBundles {
   bundles: DailyBundle[];
 }
 
-export async function handleGetHistory(req: Request, res: Response, userId: string): Promise<void> {
+export async function handleGetHistory(
+  req: Request,
+  res: Response,
+  userId: string
+): Promise<void> {
   try {
-    const { limit, before } = req.query as unknown as HistoryQuery;
-
+    const { limit } = req.query as unknown as HistoryQuery;
     const parsedLimit = limit ? Math.min(Math.max(1, Number(limit)), 100) : 30;
 
-    const bundles = await getBundleHistory(userId, parsedLimit, before);
+    const bundles = await getBundleHistory(userId, parsedLimit);
 
-    // Group bundles by arcId
+    // Group bundles by arcId (works for both new bundles and legacy ones,
+    // which also carry an arcId).
     const bundlesByArc = new Map<string, DailyBundle[]>();
     const arcOrder: string[] = [];
 
     for (const bundle of bundles) {
-      if (!bundlesByArc.has(bundle.arcId)) {
-        bundlesByArc.set(bundle.arcId, []);
-        arcOrder.push(bundle.arcId);
+      const arcId = bundle.arcId || 'unknown';
+      if (!bundlesByArc.has(arcId)) {
+        bundlesByArc.set(arcId, []);
+        arcOrder.push(arcId);
       }
-      bundlesByArc.get(bundle.arcId)!.push(bundle);
+      bundlesByArc.get(arcId)!.push(bundle);
     }
 
-    // Fetch arc info for each unique arcId
     const arcGroups: ArcWithBundles[] = [];
     for (const arcId of arcOrder) {
       const arc = await getArc(userId, arcId);
       arcGroups.push({
-        arc: arc ? {
-          id: arc.id,
-          theme: arc.theme,
-          description: arc.description,
-        } : {
-          id: arcId,
-          theme: 'Unknown Arc',
-          description: '',
-        },
+        arc: arc
+          ? { id: arc.id, theme: arc.theme, description: arc.description }
+          : { id: arcId, theme: 'Earlier Encounters', description: '' },
         bundles: bundlesByArc.get(arcId)!,
       });
     }
 
     res.json({ arcGroups, bundles });
   } catch (error) {
-    console.error('Error in GET /api/history:', error);
+    console.error('[History] Error in GET /api/history:', error);
     res.status(500).json({ error: 'Failed to get history' });
   }
 }

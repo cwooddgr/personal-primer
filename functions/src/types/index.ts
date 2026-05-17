@@ -145,8 +145,10 @@ export interface LLMSeasonPlan {
   }>;
 }
 
-// Bundle artifact selection via tool-use / web search.
-export interface LLMArtifactSelection {
+// Bundle draft via a single web-search pass: artifacts + framing in one call.
+// The image block carries only artwork *identity* — the actual imageUrl /
+// sourceUrl are resolved afterward via the Wikimedia Commons API.
+export interface LLMBundleDraft {
   music: {
     title: string;
     artist: string;
@@ -154,16 +156,16 @@ export interface LLMArtifactSelection {
   };
   image: {
     title: string;
-    artist?: string;
+    artist: string;
     year?: string;
-    sourceUrl: string;
-    imageUrl: string;
+    searchQuery: string;
   };
   text: {
     content: string;
     source: string;
     author: string;
   };
+  framingText: string;
 }
 
 // Light user profile derivation at a season boundary.

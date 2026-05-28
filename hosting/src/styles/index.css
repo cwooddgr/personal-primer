@@ -332,6 +332,24 @@ body {
 }
 
 /* Music Card */
+.youtube-embed {
+  margin-top: 1rem;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.youtube-embed iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
 .music-links {
   margin-top: 1rem;
   display: flex;

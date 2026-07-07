@@ -133,7 +133,7 @@ export type TodayResponse =
       arc: Arc;
       dayInArc: number;
     }
-  | { status: 'failed' };
+  | { status: 'failed'; reason?: string };
 
 export type TodayReadyResponse = Extract<TodayResponse, { status: 'ready' }>;
 

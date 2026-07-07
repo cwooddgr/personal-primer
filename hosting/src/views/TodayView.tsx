@@ -15,6 +15,7 @@ function TodayView() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [failedReason, setFailedReason] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [endingArc, setEndingArc] = useState(false);
   const [arcCompletion, setArcCompletion] = useState<ArcCompletionData | undefined>();
@@ -36,6 +37,7 @@ function TodayView() {
     setLoading(true);
     setError(null);
     setFailed(false);
+    setFailedReason(null);
     try {
       const todayResponse = await getToday();
 
@@ -51,11 +53,12 @@ function TodayView() {
         setData(todayResponse);
         setGenerating(false);
       } else if (todayResponse.status === 'failed') {
-        console.error('[TodayView] Bundle generation failed.');
+        console.error('[TodayView] Bundle generation failed:', todayResponse.reason);
         stopPolling();
         setData(null);
         setGenerating(false);
         setFailed(true);
+        setFailedReason(todayResponse.reason ?? null);
       } else {
         // status === 'generating' — keep showing the loading state and poll.
         console.log('[TodayView] Bundle is generating; polling...');
@@ -98,7 +101,10 @@ function TodayView() {
   if (failed) {
     return (
       <ErrorDisplay
-        error={"Today's encounter could not be prepared. Please try again."}
+        error={
+          failedReason ??
+          "Today's encounter could not be prepared. Please try again."
+        }
         onRetry={loadToday}
       />
     );

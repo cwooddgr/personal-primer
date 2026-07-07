@@ -333,22 +333,33 @@ export async function resetBundleToPending(
   await collections.dailyBundles.doc(id).update({
     generationStatus: 'pending',
     createdAt: toTimestamp(new Date()),
+    generationError: admin.firestore.FieldValue.delete(),
   });
 }
 
 /**
- * Transition a bundle's generationStatus. Optionally bumps generationAttempts.
+ * Transition a bundle's generationStatus. Optionally bumps generationAttempts
+ * and records a failure reason. When moving to a non-failed status any stored
+ * error is cleared; when moving to 'failed' the provided error is persisted (so
+ * the UI can explain why generation could not complete).
  */
 export async function setBundleGenerationStatus(
   userId: string,
   id: string,
   status: BundleGenerationStatus,
-  options: { incrementAttempts?: boolean } = {}
+  options: { incrementAttempts?: boolean; error?: string } = {}
 ): Promise<void> {
   const collections = getUserCollections(userId);
   const updates: Record<string, unknown> = { generationStatus: status };
   if (options.incrementAttempts) {
     updates.generationAttempts = admin.firestore.FieldValue.increment(1);
+  }
+  if (status === 'failed') {
+    if (options.error !== undefined) {
+      updates.generationError = options.error;
+    }
+  } else {
+    updates.generationError = admin.firestore.FieldValue.delete();
   }
   await collections.dailyBundles.doc(id).update(updates);
 }
@@ -418,6 +429,7 @@ export async function fillBundleContent(
     text: content.text,
     framingText: content.framingText,
     generationStatus: 'ready',
+    generationError: admin.firestore.FieldValue.delete(),
   });
 }
 

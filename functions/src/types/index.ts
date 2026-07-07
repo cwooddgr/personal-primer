@@ -60,6 +60,10 @@ export interface DailyBundle {
   // generationStatus is 'ready'.
   generationStatus: BundleGenerationStatus;
   generationAttempts: number;
+  // Set when generationStatus is 'failed': the raw error message from the last
+  // failed generation attempt. Surfaced (after attempts are exhausted) so the
+  // UI can explain *why* today's encounter could not be prepared.
+  generationError?: string;
   music: {
     title: string;
     artist: string;
@@ -187,7 +191,7 @@ export type TodayResponse =
       arc: Arc;
       dayInArc: number;
     }
-  | { status: 'failed' };
+  | { status: 'failed'; reason?: string };
 
 export interface MessageRequest {
   message: string;

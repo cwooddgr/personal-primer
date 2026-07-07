@@ -279,6 +279,7 @@ export async function generateDailyBundle(
     );
     await setBundleGenerationStatus(userId, bundle.id, 'failed', {
       incrementAttempts: true,
+      error: err instanceof Error ? err.message : String(err),
     });
     throw err;
   }

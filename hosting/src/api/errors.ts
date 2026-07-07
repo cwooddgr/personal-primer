@@ -29,6 +29,21 @@ interface AnthropicError {
 export function parseError(error: unknown): ParsedError {
   const errorString = error instanceof Error ? error.message : String(error);
 
+  // Credit depletion. Anthropic reports this as an invalid_request_error whose
+  // message contains "credit balance is too low", so it must be caught before
+  // the JSON/status-code branches below (which would otherwise mislabel it as a
+  // bug or generic server error). Retryable so the user can re-check after
+  // topping up.
+  if (/credit balance is too low/i.test(errorString)) {
+    return {
+      userMessage:
+        "The app's Anthropic API account is out of credits, so today's encounter couldn't be generated. Add credits at console.anthropic.com, then try again.",
+      developerInfo: `Anthropic: credit balance too low — ${errorString.slice(0, 150)}`,
+      isRetryable: true,
+      code: 'NO_CREDIT',
+    };
+  }
+
   // Try to extract JSON from error message (backend often returns "CODE JSON")
   const jsonMatch = errorString.match(/^(\d+)\s+(.+)$/);
   if (jsonMatch) {

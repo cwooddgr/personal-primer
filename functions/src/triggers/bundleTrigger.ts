@@ -65,6 +65,7 @@ export const bundleGenerator = onDocumentWritten(
       );
       await setBundleGenerationStatus(userId, bundleId, 'failed', {
         incrementAttempts: true,
+        error: `Arc ${bundle.arcId} not found for this bundle.`,
       });
       return;
     }

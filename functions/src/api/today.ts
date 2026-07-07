@@ -111,6 +111,8 @@ export async function handleGetToday(
         );
         await setBundleGenerationStatus(userId, bundle.id, 'failed', {
           incrementAttempts: true,
+          error:
+            'Generation stalled and did not finish in time. Retrying automatically.',
         });
       }
       const generating: TodayResponse = { status: 'generating' };
@@ -130,7 +132,12 @@ export async function handleGetToday(
         console.warn(
           `[Today] Bundle ${bundle.id} failed ${bundle.generationAttempts} times; giving up.`
         );
-        const failed: TodayResponse = { status: 'failed' };
+        const failed: TodayResponse = {
+          status: 'failed',
+          ...(bundle.generationError
+            ? { reason: bundle.generationError }
+            : {}),
+        };
         res.json(failed);
       }
       return;

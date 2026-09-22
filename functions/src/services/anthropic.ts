@@ -6,11 +6,8 @@ const anthropicApiKey = defineSecret('ANTHROPIC_API_KEY');
 export const MODEL = 'claude-opus-5-5';
 
 // Opus 5.5 always thinks; effort is the only control, and it defaults to
-// 'medium'. Structured generation keeps that default, set explicitly. The
-// chat loops run at 'low' because they were tuned on Opus 4.7 with thinking
-// off and a user is waiting on the reply.
-const STRUCTURED_EFFORT = 'medium' as const;
-const CHAT_EFFORT = 'low' as const;
+// 'medium'. Every call runs at 'high' (Charlie's call, 2026-09-22).
+const EFFORT = 'high' as const;
 
 let client: Anthropic | null = null;
 
@@ -80,7 +77,7 @@ export async function generateStructured<T>(
     max_tokens: maxTokens,
     system: systemPrompt,
     output_config: {
-      effort: STRUCTURED_EFFORT,
+      effort: EFFORT,
       format: {
         type: 'json_schema',
         schema: strictSchema(tool.input_schema) as Record<string, unknown>,
@@ -141,7 +138,7 @@ export async function generateStructuredWithWebSearch<T>(
     system: systemPrompt,
     tools,
     messages,
-    output_config: { effort: STRUCTURED_EFFORT },
+    output_config: { effort: EFFORT },
   });
 
   // Handle pause_turn: append assistant content and continue.
@@ -155,7 +152,7 @@ export async function generateStructuredWithWebSearch<T>(
       system: systemPrompt,
       tools,
       messages,
-      output_config: { effort: STRUCTURED_EFFORT },
+      output_config: { effort: EFFORT },
     });
   }
 
@@ -198,7 +195,7 @@ export async function runToolUseLoop(
   initialMessages: ChatMessage[],
   tools: ClientTool[],
   handlers: Record<string, ToolHandler>,
-  maxTokens: number = 8000
+  maxTokens: number = 16000
 ): Promise<ToolUseLoopResult> {
   const anthropic = getClient();
 
@@ -225,7 +222,7 @@ export async function runToolUseLoop(
       system: systemPrompt,
       tools: toolDefs,
       messages,
-      output_config: { effort: CHAT_EFFORT },
+      output_config: { effort: EFFORT },
     });
 
     const toolUseBlocks = response.content.filter(

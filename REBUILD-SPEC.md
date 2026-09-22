@@ -80,7 +80,7 @@ incomplete-message check. Add prompt caching where prompts are large and stable
 > **Author:** Claude Code (coder) · **Date:** 2026-09-22 · **Status:** decided-by-user
 > Superseded: all calls moved to `claude-opus-5-5`. Opus 5.5 rejects forced
 > `tool_choice`, so `generateStructured` now uses structured outputs
-> (`output_config.format`); effort is `medium` for generation, `low` for chat.
+> (`output_config.format`); effort is `high` on every call.
 
 ### 2. Seasons and arcs
 

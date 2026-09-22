@@ -168,7 +168,7 @@ export async function extractInsights(
     EXTRACTION_SYSTEM_PROMPT,
     buildExtractionPrompt(bundle, conversation),
     SUBMIT_EXTRACTION_TOOL,
-    4096
+    16000
   );
 
   const insights: SessionInsights = {
@@ -257,7 +257,7 @@ async function generateArcSummary(userId: string, arc: Arc): Promise<string> {
     buildArcSummarySystemPrompt(voicePreference),
     buildArcSummaryPrompt(arc, bundles),
     SUBMIT_ARC_SUMMARY_TOOL,
-    4096
+    16000
   );
   return result.summary;
 }
@@ -309,7 +309,7 @@ export async function deriveSeasonUserProfile(
         PROFILE_SYSTEM_PROMPT,
         buildProfilePrompt(insights),
         SUBMIT_PROFILE_TOOL,
-        4096
+        16000
       );
     } catch (err) {
       console.warn('[Insights] Profile derivation failed; using empty profile.', err);

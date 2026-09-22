@@ -40,7 +40,7 @@ Sessions end on an explicit action, a natural conversational close, or one hour 
 - **Frontend**: React 18 + Vite
 - **Backend**: Firebase Cloud Functions v2 (Node.js 20 / TypeScript)
 - **Database**: Firebase Firestore
-- **LLM**: Anthropic Claude API (`claude-opus-4-7`) with the `web_search` tool for artifact discovery and verification
+- **LLM**: Anthropic Claude API (`claude-opus-5-5`) with the `web_search` tool for artifact discovery and verification
 
 ## Setup
 

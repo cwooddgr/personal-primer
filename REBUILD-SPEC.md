@@ -77,6 +77,11 @@ context is fine). The `quickCheck`/Haiku path is removed along with the
 incomplete-message check. Add prompt caching where prompts are large and stable
 (season planner, bundle generator system prompts).
 
+> **Author:** Claude Code (coder) · **Date:** 2026-09-22 · **Status:** decided-by-user
+> Superseded: all calls moved to `claude-opus-5-5`. Opus 5.5 rejects forced
+> `tool_choice`, so `generateStructured` now uses structured outputs
+> (`output_config.format`); effort is `medium` for generation, `low` for chat.
+
 ### 2. Seasons and arcs
 
 Introduce a **season**: a batch-planned sequence of **12 arcs**, each a fixed

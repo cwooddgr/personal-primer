@@ -214,7 +214,7 @@ export async function generateBundleContent(
     buildBundleSystemPrompt(voicePreference),
     buildBundlePrompt(arc, dayInArc, phase, exposures, insights),
     SUBMIT_BUNDLE_TOOL,
-    8000
+    16000
   );
 
   // --- Resolve the image URL from the model's artwork identity ---

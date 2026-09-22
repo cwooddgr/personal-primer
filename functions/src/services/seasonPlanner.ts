@@ -136,7 +136,7 @@ export async function planNextSeason(userId: string): Promise<{
     SEASON_PLANNER_SYSTEM_PROMPT,
     buildSeasonPlanPrompt(seasonNumber, priorTopics, memoryProfile),
     PLAN_SEASON_TOOL,
-    8000
+    16000
   );
 
   if (!plan.arcs || plan.arcs.length === 0) {

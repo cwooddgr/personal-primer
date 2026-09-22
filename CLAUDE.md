@@ -15,7 +15,7 @@ The project was re-architected from an earlier 2024-era design; see `REBUILD-SPE
 - **Frontend:** React 18 + Vite (in `hosting/`)
 - **Backend:** Node.js 20 / TypeScript with Firebase Cloud Functions v2 (in `functions/`)
 - **Database:** Firebase Firestore
-- **LLM:** Anthropic Claude API (`claude-opus-4-7`) via `@anthropic-ai/sdk`, using the `web_search` server tool for artifact discovery and verification
+- **LLM:** Anthropic Claude API (`claude-opus-5-5`, since 2026-09-22) via `@anthropic-ai/sdk`, using the `web_search` server tool for artifact discovery and verification
 - **Authentication:** Firebase Auth (multi-user with email whitelist)
 
 ## Build and Deploy Commands
@@ -145,7 +145,7 @@ When the final day of an arc ends, the LLM generates a short retrospective and t
 - `api/endSession.ts`, `api/endArcEarly.ts` — session/arc end, arc and season advancement
 - `api/history.ts`, `api/conversationHistory.ts` — past bundles and conversations
 - `triggers/bundleTrigger.ts` — Firestore `onDocumentWritten` trigger; generates the daily bundle out-of-band
-- `services/anthropic.ts` — Claude client; structured-output (tool-use) and `web_search` helpers
+- `services/anthropic.ts` — Claude client; structured-output (`output_config.format`), `web_search`, and client-tool-loop helpers
 - `services/seasonPlanner.ts` — batched 12-arc season generation
 - `services/bundleGenerator.ts` — daily bundle generation: single web-search call + Wikimedia image resolution
 - `services/conversationManager.ts` — chat with tool-based session/arc end

@@ -3,7 +3,14 @@ import { defineSecret } from 'firebase-functions/params';
 
 const anthropicApiKey = defineSecret('ANTHROPIC_API_KEY');
 
-export const MODEL = 'claude-opus-4-7';
+export const MODEL = 'claude-opus-5-5';
+
+// Opus 5.5 always thinks; effort is the only control, and it defaults to
+// 'medium'. Structured generation keeps that default, set explicitly. The
+// chat loops run at 'low' because they were tuned on Opus 4.7 with thinking
+// off and a user is waiting on the reply.
+const STRUCTURED_EFFORT = 'medium' as const;
+const CHAT_EFFORT = 'low' as const;
 
 let client: Anthropic | null = null;
 
@@ -43,14 +50,28 @@ export interface StructuredTool {
 }
 
 /**
- * Generate structured output by forcing the model to emit exactly one tool
- * call. The tool's `input` is returned as `T` — no text parsing involved.
+ * Structured outputs require `additionalProperties: false` on every object.
+ * The tool schemas predate that, so add it here rather than in each caller.
+ */
+function strictSchema(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(strictSchema);
+  if (!schema || typeof schema !== 'object') return schema;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(schema)) out[k] = strictSchema(v);
+  if (out.type === 'object') out.additionalProperties = false;
+  return out;
+}
+
+/**
+ * Generate structured output constrained to the tool's input schema. (Forced
+ * `tool_choice` was the old way to do this; Opus 5.5 rejects it with a 400.)
+ * The parsed JSON is returned as `T`.
  */
 export async function generateStructured<T>(
   systemPrompt: string,
   userPrompt: string,
   tool: StructuredTool,
-  maxTokens: number = 8000
+  maxTokens: number = 16000
 ): Promise<T> {
   const anthropic = getClient();
 
@@ -58,19 +79,22 @@ export async function generateStructured<T>(
     model: MODEL,
     max_tokens: maxTokens,
     system: systemPrompt,
-    tools: [tool],
-    tool_choice: { type: 'tool', name: tool.name },
+    output_config: {
+      effort: STRUCTURED_EFFORT,
+      format: {
+        type: 'json_schema',
+        schema: strictSchema(tool.input_schema) as Record<string, unknown>,
+      },
+    },
     messages: [{ role: 'user', content: userPrompt }],
   });
 
-  const toolUse = response.content.find(
-    (b): b is Anthropic.ToolUseBlock =>
-      b.type === 'tool_use' && b.name === tool.name
-  );
-  if (!toolUse) {
-    throw new Error(`Model did not call the ${tool.name} tool`);
+  if (response.stop_reason !== 'end_turn') {
+    throw new Error(
+      `${tool.name}: generation stopped early (${response.stop_reason})`
+    );
   }
-  return toolUse.input as T;
+  return JSON.parse(extractText(response.content)) as T;
 }
 
 // ---------------------------------------------------------------------------
@@ -95,11 +119,18 @@ export async function generateStructuredWithWebSearch<T>(
   systemPrompt: string,
   userPrompt: string,
   submitTool: StructuredTool,
-  maxTokens: number = 8000
+  maxTokens: number = 16000
 ): Promise<T> {
   const anthropic = getClient();
 
-  const tools: Anthropic.ToolUnion[] = [WEB_SEARCH_TOOL, submitTool];
+  const tools: Anthropic.ToolUnion[] = [
+    WEB_SEARCH_TOOL,
+    {
+      ...submitTool,
+      input_schema: strictSchema(submitTool.input_schema) as Anthropic.Tool.InputSchema,
+      strict: true,
+    },
+  ];
   const messages: Anthropic.MessageParam[] = [
     { role: 'user', content: userPrompt },
   ];
@@ -110,6 +141,7 @@ export async function generateStructuredWithWebSearch<T>(
     system: systemPrompt,
     tools,
     messages,
+    output_config: { effort: STRUCTURED_EFFORT },
   });
 
   // Handle pause_turn: append assistant content and continue.
@@ -123,6 +155,7 @@ export async function generateStructuredWithWebSearch<T>(
       system: systemPrompt,
       tools,
       messages,
+      output_config: { effort: STRUCTURED_EFFORT },
     });
   }
 
@@ -165,7 +198,7 @@ export async function runToolUseLoop(
   initialMessages: ChatMessage[],
   tools: ClientTool[],
   handlers: Record<string, ToolHandler>,
-  maxTokens: number = 2048
+  maxTokens: number = 8000
 ): Promise<ToolUseLoopResult> {
   const anthropic = getClient();
 
@@ -192,6 +225,7 @@ export async function runToolUseLoop(
       system: systemPrompt,
       tools: toolDefs,
       messages,
+      output_config: { effort: CHAT_EFFORT },
     });
 
     const toolUseBlocks = response.content.filter(
